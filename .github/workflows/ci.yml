@@ -157,7 +157,7 @@ jobs:
       - name: Overlay selected package
         shell: bash
         env:
-          PACKAGE: ${{ matrix.package }}
+          PACKAGE: ${{ inputs.package }}
         run: |
           set -euo pipefail
           rm -rf "void-packages/srcpkgs/$PACKAGE"
@@ -202,7 +202,7 @@ jobs:
         working-directory: void-packages
         shell: bash
         env:
-          PACKAGE: ${{ matrix.package }}
+          PACKAGE: ${{ inputs.package }}
         run: |
           set -euo pipefail
           if [ "$PACKAGE" = "librewolf" ]; then
@@ -233,7 +233,7 @@ jobs:
       - name: Upload XBPS package artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.package }}-x86_64-musl
+          name: ${{ inputs.package }}-x86_64-musl
           path: dist/*.xbps
           if-no-files-found: error
           compression-level: 0
