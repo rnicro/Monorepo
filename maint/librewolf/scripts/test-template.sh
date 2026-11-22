@@ -289,7 +289,7 @@ grep -Fq 'PGO-use build failed; retrying with the non-PGO LTO configuration.' "$
   exit 1
 }
 
-actual_distfile="${template##*/}"
+actual_distfile="${1##*/}"
 [ "$actual_distfile" = "$expected_template_distfile" ] || {
   echo "distfile basename mismatch: expected $expected_template_distfile, got $actual_distfile" >&2
   exit 1
