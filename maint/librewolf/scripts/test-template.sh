@@ -289,7 +289,7 @@ grep -Fq 'PGO-use build failed; retrying with the non-PGO LTO configuration.' "$
   exit 1
 }
 
-actual_distfile="${1##*/}"
+actual_distfile="${template##*/}"
 [ "$actual_distfile" = "$expected_template_distfile" ] || {
   echo "distfile basename mismatch: expected $expected_template_distfile, got $actual_distfile" >&2
   exit 1
@@ -301,6 +301,4 @@ case "$expected_distfile" in
 esac
 
 distfile="$expected_distfile"
-release_tag="${version}-r${revision}"
-
 printf 'validated: %s (package revision %s; source %s)\n' "$pkgname" "$revision" "$distfile"
