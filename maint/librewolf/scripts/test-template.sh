@@ -14,7 +14,7 @@ distfiles=$(sed -n 's/^distfiles="//p' "$template" | sed 's/"$//')
 : "${pkgname:?}" "${version:?}" "${revision:?}" "${_rev:?}" "${checksum:?}" "${distfiles:?}"
 
 [ "$pkgname" = "librewolf" ] || {
-  echo "workflow is only valid for pkgname=librewolf" >&2
+  echo "expected pkgname=librewolf" >&2
   exit 1
 }
 
