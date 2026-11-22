@@ -25,12 +25,13 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Select one package to build (x86_64-musl)"
+        description: "Select one package or all packages (x86_64-musl)"
         type: choice
         required: true
         default: none
         options:
           - none
+          - all
           - aria2
           - brightnessctl
           - librewolf
@@ -111,11 +112,16 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
-    name: Build ${{ inputs.package }}
+    name: Build ${{ matrix.package }}
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.package != 'none' }}
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        package: ${{ fromJSON(inputs.package == 'all' && '["aria2","brightnessctl","librewolf","linux7.3","tofi","velotype","wlsunset"]' || format('["{0}"]', inputs.package)) }}
     steps:
       - name: Check out package collection
         uses: actions/checkout@v6
@@ -133,7 +139,7 @@ jobs:
       - name: Prepare package-specific inputs
         shell: bash
         env:
-          PACKAGE: ${{ inputs.package }}
+          PACKAGE: ${{ matrix.package }}
         run: |
           set -euo pipefail
           case "$PACKAGE" in
@@ -227,7 +233,7 @@ jobs:
       - name: Upload XBPS package artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.package }}-x86_64-musl
+          name: ${{ matrix.package }}-x86_64-musl
           path: dist/*.xbps
           if-no-files-found: error
           compression-level: 0
@@ -254,10 +260,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download selected package
+      - name: Download built packages
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.package }}-x86_64-musl
+          pattern: "*-x86_64-musl"
+          merge-multiple: true
           path: incoming
 
       - name: Install static xbps
