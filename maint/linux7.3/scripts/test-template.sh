@@ -12,7 +12,8 @@ revision="$(sed -n 's/^revision=//p' "$template")"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$revision" =~ ^[1-9][0-9]*$ ]]
 grep -Fq 'archs="x86_64-musl"' "$template"
-grep -Fq 'x86_64-dotconfig-custom' "$template"
+grep -Fq 'dotconfig-custom' "$template"
+[ -s srcpkgs/linux7.3/files/x86_64-dotconfig-custom ]
 grep -Fq 'validate-config.sh' "$template"
 
 sh srcpkgs/linux7.3/files/validate-config.sh srcpkgs/linux7.3/files/x86_64-dotconfig-custom
