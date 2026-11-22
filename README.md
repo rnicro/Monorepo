@@ -30,7 +30,7 @@ Each package build updates the repository in place. Existing package archives ar
 
 ### 1. Create the signing key
 
-XBPS remote repositories require an RSA private key in PEM format. Create an encrypted 4096-bit key on a trusted machine:
+XBPS requires remote repositories and package archives to be signed using an RSA key in PEM format ([Void Linux signing guide](https://docs.voidlinux.org/xbps/repositories/signing.html)). Create an encrypted 4096-bit key on a trusted machine:
 
 ```sh
 umask 077
@@ -65,7 +65,7 @@ Create an XBPS repository configuration file:
 
 ```sh
 sudo install -d -m 0755 /etc/xbps.d
-printf '%s\\n' \
+printf '%s\n' \
   'repository=https://github.com/rnicro/Monorepo/releases/download/xbps-repository' \
   | sudo tee /etc/xbps.d/20-rnicro.conf
 ```
