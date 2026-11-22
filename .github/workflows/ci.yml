@@ -24,11 +24,20 @@ on:
       - ".gitignore"
   workflow_dispatch:
     inputs:
-      build_packages:
-        description: "Build all seven packages with xbps-src (x86_64-musl)"
-        type: boolean
-        required: false
-        default: false
+      package:
+        description: "Select one package to build (x86_64-musl)"
+        type: choice
+        required: true
+        default: none
+        options:
+          - none
+          - aria2
+          - brightnessctl
+          - librewolf
+          - linux7.3
+          - tofi
+          - velotype
+          - wlsunset
 
 permissions:
   contents: read
@@ -108,22 +117,11 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
-    name: Build ${{ matrix.package }}
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.build_packages) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[build-all]')) }}
+    name: Build ${{ inputs.package }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.package != 'none' }}
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 360
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - aria2
-          - brightnessctl
-          - librewolf
-          - linux7.3
-          - tofi
-          - velotype
-          - wlsunset
     steps:
       - name: Check out package collection
         uses: actions/checkout@v6
@@ -141,7 +139,7 @@ jobs:
       - name: Prepare package-specific inputs
         shell: bash
         env:
-          PACKAGE: ${{ matrix.package }}
+          PACKAGE: ${{ inputs.package }}
         run: |
           set -euo pipefail
           case "$PACKAGE" in
