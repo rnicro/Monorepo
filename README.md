@@ -21,13 +21,13 @@ The templates define the supported architecture and CPU tuning. Packages using `
 ## Repository layout
 
 - `srcpkgs/<package>/`: canonical XBPS templates, patches, and package-owned files.
-- `maint/<package>/scripts/`: package-specific validation, source preparation, and retained legacy release helpers.
-- `maint/librewolf/github-scripts/`: LibreWolf source fallback and package validation/signing helpers.
+- `maint/<package>/scripts/`: package-specific validation and source preparation.
+- `maint/librewolf/github-scripts/`: LibreWolf source fallback and template validation.
 - `examples/<package>/`: optional runtime configuration examples.
 - `docs/packages/`: original package documentation retained from the individual repositories.
 - `.github/workflows/ci.yml`: consolidated validation and optional build workflow.
 
-The original per-repository workflows have been replaced by the monorepo workflow. Legacy `legacy-publish-release.sh` helpers are retained for reference but are not invoked by CI. CI builds are uploaded as workflow artifacts; they are not automatically published as separate GitHub Releases.
+The original per-repository release automation has been removed. Manual builds produce workflow artifacts; no GitHub Releases are published automatically.
 
 ## Build a package locally
 
@@ -70,7 +70,7 @@ For LibreWolf, run its fallback preparation command before copying `srcpkgs/libr
 
 The default GitHub Actions workflow validates shell syntax, package metadata, package-specific checks, the custom kernel configuration, and LibreWolf's pinned source fallbacks.
 
-To run real `xbps-src` builds, open **Actions → Validate and build XBPS packages → Run workflow** and enable **Build all packages**. The build matrix targets `x86_64-musl` and uploads the resulting `.xbps` files as workflow artifacts. It does not publish releases or overwrite existing package releases.
+To build a package, open **Actions → Validate and build XBPS packages → Run workflow**, select one package from the **Package** dropdown, and start the run. Only that package is built for `x86_64-musl`; its `.xbps` files are uploaded as workflow artifacts. Pushes and pull requests run validation only.
 
 ## Updating recipes
 
