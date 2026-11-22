@@ -78,32 +78,30 @@ jobs:
           done < <(find srcpkgs maint -type f \( -name template -o -name '*.sh' \) -print0)
 
       - name: Validate pinned LibreWolf source fallbacks
-        run: bash maint/librewolf/github-scripts/prepare-source-fallbacks.sh
+        run: bash maint/librewolf/scripts/prepare-source-fallbacks.sh
 
       - name: Validate LibreWolf package template
-        run: bash maint/librewolf/github-scripts/validate-template.sh srcpkgs/librewolf/template
+        run: bash maint/librewolf/scripts/test-template.sh
 
-      - name: Validate Velotype source preparation and build safeguards
+      - name: Validate all package templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for package in aria2 brightnessctl librewolf linux7.3 tofi velotype wlsunset; do
+            echo "::group::$package"
+            bash "maint/$package/scripts/test-template.sh"
+            echo "::endgroup::"
+          done
+
+      - name: Validate Velotype source preparation and Wayland patch
         shell: bash
         run: |
           set -euo pipefail
           bash maint/velotype/scripts/test-prepare-source.sh
           bash maint/velotype/scripts/test-wayland-patch.sh
 
-      - name: Validate custom Linux kernel configuration
-        run: sh srcpkgs/linux7.3/files/validate-config.sh srcpkgs/linux7.3/files/x86_64-dotconfig-custom
-
-      - name: Validate tofi
-        run: sh maint/tofi/scripts/test-template.sh
-
-      - name: Validate brightnessctl
-        run: sh maint/brightnessctl/scripts/test-template.sh
-
-      - name: Validate aria2
-        run: sh maint/aria2/scripts/test-template.sh
-
-      - name: Validate wlsunset
-        run: sh maint/wlsunset/scripts/test-template.sh
+      - name: Validate XBPS repository publisher
+        run: bash maint/repository/scripts/test-publish-xbps-repository.sh
 
       - name: Summarize supported packages
         run: |
@@ -149,7 +147,7 @@ jobs:
                 "void-packages/hostdir/sources/velotype-$version"
               ;;
             librewolf)
-              bash maint/librewolf/github-scripts/prepare-source-fallbacks.sh
+              bash maint/librewolf/scripts/prepare-source-fallbacks.sh
               ;;
           esac
 
@@ -237,3 +235,47 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
+
+  publish:
+    name: Sign and publish XBPS repository
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PRIV_KEY: ${{ secrets.PRIV_KEY }}
+      SIGN_PASS: ${{ secrets.SIGN_PASS }}
+      SIGNEDBY: ${{ vars.SIGNEDBY }}
+      REPOSITORY_TAG: xbps-repository
+    steps:
+      - name: Check out repository tools
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download selected package
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.package }}-x86_64-musl
+          path: incoming
+
+      - name: Install static xbps
+        run: |
+          set -euo pipefail
+          mkdir -p /opt/xbps
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 30 --max-time 300 \
+            --output /tmp/xbps-static.tar.xz \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
+          tar -xJf /tmp/xbps-static.tar.xz -C /opt/xbps
+          rm -f /tmp/xbps-static.tar.xz
+          echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Sign and publish repository
+        env:
+          XBPS_TARGET_ARCH: x86_64-musl
+        run: bash maint/repository/scripts/publish-xbps-repository.sh incoming
