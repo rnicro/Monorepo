@@ -23,6 +23,12 @@ trap cleanup EXIT
 command -v gh >/dev/null 2>&1 || { echo "GitHub CLI (gh) is required." >&2; exit 1; }
 command -v xbps-rindex >/dev/null 2>&1 || { echo "xbps-rindex is required." >&2; exit 1; }
 
+umask 077
+printf '%s' "$PRIV_KEY" > "$key_file"
+chmod 600 "$key_file"
+export XBPS_PASSPHRASE="$SIGN_PASS"
+unset PRIV_KEY SIGN_PASS
+
 shopt -s nullglob
 incoming_packages=("$incoming_dir"/*.xbps)
 if (( ${#incoming_packages[@]} == 0 )); then
@@ -78,6 +84,11 @@ fi
 packages=("$repository_dir"/*.xbps)
 xbps-rindex --privkey "$key_file" --sign-pkg "${packages[@]}"
 
+# Remove signature sidecars left behind if a newer version replaced an old archive.
+for signature in "$repository_dir"/*.xbps.sig2; do
+  [[ -f "${signature%.sig2}" ]] || rm -f -- "$signature"
+done
+
 [[ -s "$repodata_file" ]] || {
   echo "Expected repository index was not generated: $repodata_file" >&2
   exit 1
@@ -95,9 +106,6 @@ done
 )
 
 assets=("${packages[@]}" "$repository_dir"/*.xbps.sig2 "$repodata_file" "$repository_dir/SHA256SUMS")
-export XBPS_PASSPHRASE="$SIGN_PASS"
-unset PRIV_KEY SIGN_PASS
-
 if [[ "$release_exists" == true ]]; then
   gh release upload "$repository_tag" "${assets[@]}" --repo "$GH_REPO" --clobber
 else
