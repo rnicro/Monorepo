@@ -54,19 +54,19 @@ archive="${cache}/${commit}.tar.gz"
 
 # A valid cached archive should be verified and reused without networking.
 cp "$good_archive" "$archive"
-CURL_FIXTURE="$good_archive" "${fixture_repo}/scripts/prepare-source.sh" "$cache"
+CURL_FIXTURE="$good_archive" "${fixture_repo}/maint/velotype/scripts/prepare-source.sh" "$cache"
 [[ ! -s "$curl_log" ]] || { echo "valid source cache unexpectedly downloaded again" >&2; exit 1; }
 
 # A corrupt cached archive must be discarded and replaced only after checksum
 # verification of the downloaded copy succeeds.
 printf 'stale cache contents\n' > "$archive"
-CURL_FIXTURE="$good_archive" "${fixture_repo}/scripts/prepare-source.sh" "$cache"
+CURL_FIXTURE="$good_archive" "${fixture_repo}/maint/velotype/scripts/prepare-source.sh" "$cache"
 cmp -s "$good_archive" "$archive" || { echo "verified download was not installed in the cache" >&2; exit 1; }
 [[ "$(wc -l < "$curl_log")" -eq 1 ]] || { echo "expected exactly one download after cache corruption" >&2; exit 1; }
 
 # A bad download must fail closed and must not leave a cache entry behind.
 printf 'stale cache contents\n' > "$archive"
-if CURL_FIXTURE="$bad_archive" "${fixture_repo}/scripts/prepare-source.sh" "$cache" >"${tmp}/bad-download.log" 2>&1; then
+if CURL_FIXTURE="$bad_archive" "${fixture_repo}/maint/velotype/scripts/prepare-source.sh" "$cache" >"${tmp}/bad-download.log" 2>&1; then
 	echo "source helper accepted a download with the wrong SHA-256" >&2
 	exit 1
 fi
@@ -79,7 +79,7 @@ grep -Fq 'Source SHA-256 mismatch' "${tmp}/bad-download.log" || {
 [[ "$(wc -l < "$curl_log")" -eq 2 ]] || { echo "unexpected download count after checksum failure" >&2; exit 1; }
 
 # The no-cache mode must still verify the downloaded bytes.
-CURL_FIXTURE="$good_archive" "${fixture_repo}/scripts/prepare-source.sh"
+CURL_FIXTURE="$good_archive" "${fixture_repo}/maint/velotype/scripts/prepare-source.sh"
 [[ "$(wc -l < "$curl_log")" -eq 3 ]] || { echo "no-cache mode did not download exactly once" >&2; exit 1; }
 
 echo "source preparation checksum/cache tests passed"
