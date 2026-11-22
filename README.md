@@ -53,11 +53,15 @@ The publish job uses the repository's `GITHUB_TOKEN`. Ensure Actions is allowed 
 
 The repository key is initialized on the first publication. Keep the same private key and passphrase for future updates; replacing the key requires a coordinated repository/client trust-key migration.
 
-### 3. Build and publish one package
+### 3. Build and publish packages
 
-Open **Actions → Validate and build XBPS packages → Run workflow**, select one package in the **Package** dropdown, and start the run.
+Open **Actions → Validate and build XBPS packages → Run workflow** and choose an entry from the **Package** dropdown:
 
-The workflow validates the sources, builds only the selected package for `x86_64-musl`, signs its XBPS archive, refreshes the repository index, and updates the `xbps-repository` release. Pushes and pull requests run validation only; they do not publish packages.
+- Select an individual package to build only that package.
+- Select `all` to build all seven packages. Builds run at most two at a time.
+- Select `none` to run validation without building or publishing.
+
+After successful builds, the workflow gathers the generated artifacts, signs their XBPS archives, refreshes the repository index, and updates the `xbps-repository` release. Pushes and pull requests run validation only; they do not publish packages.
 
 ### 4. Add the repository to a Void Linux system
 
