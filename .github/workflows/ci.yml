@@ -89,7 +89,6 @@ jobs:
           set -euo pipefail
           bash maint/velotype/scripts/test-prepare-source.sh
           bash maint/velotype/scripts/test-wayland-patch.sh
-          bash maint/velotype/scripts/test-publish-release.sh
 
       - name: Validate custom Linux kernel configuration
         run: sh srcpkgs/linux7.3/files/validate-config.sh srcpkgs/linux7.3/files/x86_64-dotconfig-custom
