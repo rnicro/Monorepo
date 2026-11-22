@@ -1,0 +1,242 @@
+name: Validate and build XBPS packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "srcpkgs/**"
+      - "maint/**"
+      - "examples/**"
+      - "docs/**"
+      - ".github/workflows/ci.yml"
+      - ".github/dependabot.yml"
+      - "README.md"
+      - ".gitignore"
+  pull_request:
+    paths:
+      - "srcpkgs/**"
+      - "maint/**"
+      - "examples/**"
+      - "docs/**"
+      - ".github/workflows/ci.yml"
+      - ".github/dependabot.yml"
+      - "README.md"
+      - ".gitignore"
+  workflow_dispatch:
+    inputs:
+      build_packages:
+        description: "Build all seven packages with xbps-src (x86_64-musl)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rnicro-packages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  XBPS_TARGET_ARCH: x86_64-musl
+
+jobs:
+  validate:
+    name: Validate package sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              */template) bash -n "$file" ;;
+              *)
+                if head -n 1 "$file" | grep -q 'bash'; then
+                  bash -n "$file"
+                else
+                  sh -n "$file"
+                fi
+                ;;
+            esac
+          done < <(find srcpkgs maint -type f \( -name template -o -name '*.sh' \) -print0)
+
+      - name: Validate pinned LibreWolf source fallbacks
+        run: bash maint/librewolf/github-scripts/prepare-source-fallbacks.sh
+
+      - name: Validate LibreWolf package template
+        run: bash maint/librewolf/github-scripts/validate-template.sh srcpkgs/librewolf/template
+
+      - name: Validate Velotype source preparation and build safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash maint/velotype/scripts/test-prepare-source.sh
+          bash maint/velotype/scripts/test-wayland-patch.sh
+          bash maint/velotype/scripts/test-publish-release.sh
+
+      - name: Validate custom Linux kernel configuration
+        run: sh srcpkgs/linux7.3/files/validate-config.sh srcpkgs/linux7.3/files/x86_64-dotconfig-custom
+
+      - name: Validate tofi
+        run: sh maint/tofi/scripts/test-template.sh
+
+      - name: Validate brightnessctl
+        run: sh maint/brightnessctl/scripts/test-template.sh
+
+      - name: Validate aria2
+        run: sh maint/aria2/scripts/test-template.sh
+
+      - name: Validate wlsunset
+        run: sh maint/wlsunset/scripts/test-template.sh
+
+      - name: Summarize supported packages
+        run: |
+          {
+            echo "## XBPS source package validation"
+            echo
+            echo "Validated seven packages for the x86_64-musl target."
+            echo
+            printf '%s\n' "- aria2" "- brightnessctl" "- librewolf" "- linux7.3" "- tofi" "- velotype" "- wlsunset"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build ${{ matrix.package }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_packages }}
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - aria2
+          - brightnessctl
+          - librewolf
+          - linux7.3
+          - tofi
+          - velotype
+          - wlsunset
+    steps:
+      - name: Check out package collection
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check out upstream Void packages
+        uses: actions/checkout@v6
+        with:
+          repository: void-linux/void-packages
+          ref: master
+          path: void-packages
+          persist-credentials: false
+
+      - name: Prepare package-specific inputs
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          case "$PACKAGE" in
+            velotype)
+              version="$(sed -n 's/^version=//p' srcpkgs/velotype/template)"
+              mkdir -p "void-packages/hostdir/sources/velotype-$version"
+              bash maint/velotype/scripts/prepare-source.sh \
+                "void-packages/hostdir/sources/velotype-$version"
+              ;;
+            librewolf)
+              bash maint/librewolf/github-scripts/prepare-source-fallbacks.sh
+              ;;
+          esac
+
+      - name: Overlay selected package
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          rm -rf "void-packages/srcpkgs/$PACKAGE"
+          mkdir -p "void-packages/srcpkgs/$PACKAGE"
+          cp -a "srcpkgs/$PACKAGE/." "void-packages/srcpkgs/$PACKAGE/"
+
+      - name: Install static xbps
+        run: |
+          set -euo pipefail
+          mkdir -p /opt/xbps
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 30 --max-time 300 \
+            --output /tmp/xbps-static.tar.xz \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
+          tar -xJf /tmp/xbps-static.tar.xz -C /opt/xbps
+          rm -f /tmp/xbps-static.tar.xz
+          echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Bootstrap xbps-src
+        working-directory: void-packages
+        run: |
+          set -euo pipefail
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          cpu_jobs="$(nproc)"
+          available_kib="$(awk '/^MemAvailable:/ { print $2; exit }' /proc/meminfo)"
+          reserved_kib=$((1536 * 1024))
+          per_job_kib=$((3 * 1024 * 1024))
+          if [ "$available_kib" -gt "$reserved_kib" ]; then
+            memory_jobs=$(((available_kib - reserved_kib) / per_job_kib))
+          else
+            memory_jobs=1
+          fi
+          [ "$memory_jobs" -ge 1 ] || memory_jobs=1
+          build_jobs="$cpu_jobs"
+          [ "$memory_jobs" -ge "$build_jobs" ] || build_jobs="$memory_jobs"
+          printf 'XBPS_MAKEJOBS=%s\n' "$build_jobs" >> etc/conf
+          printf 'Using %s build jobs (%s CPUs; %s MiB available RAM).\n' \
+            "$build_jobs" "$cpu_jobs" "$((available_kib / 1024))"
+          ./xbps-src -A "$XBPS_TARGET_ARCH" binary-bootstrap
+
+      - name: Build selected package
+        working-directory: void-packages
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          if [ "$PACKAGE" = "librewolf" ]; then
+            epoch="$(git -C "$GITHUB_WORKSPACE" log -1 --format=%ct -- srcpkgs/librewolf)"
+            [[ "$epoch" =~ ^[0-9]+$ ]]
+            printf '%s\n' "$epoch" > hostdir/source-date-epoch
+            chmod 644 hostdir/source-date-epoch
+            ./xbps-src -A "$XBPS_TARGET_ARCH" -o pgo pkg "$PACKAGE"
+          else
+            ./xbps-src -A "$XBPS_TARGET_ARCH" pkg "$PACKAGE"
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          mapfile -d '' packages < <(find hostdir/binpkgs -type f -name "$PACKAGE-*.xbps" -print0)
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "No XBPS output found for $PACKAGE" >&2
+            find hostdir/binpkgs -type f -name '*.xbps' -print >&2
+            exit 1
+          fi
+          cp -- "${packages[@]}" "$GITHUB_WORKSPACE/dist/"
+          {
+            echo "## $PACKAGE build output"
+            echo
+            for package in "$GITHUB_WORKSPACE"/dist/*.xbps; do
+              printf -- "- %s (%s)\n" "$(basename "$package")" "$(du -h "$package" | cut -f1)"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload XBPS package artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.package }}-x86_64-musl
+          path: dist/*.xbps
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7

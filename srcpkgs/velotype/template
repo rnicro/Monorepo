@@ -1,0 +1,246 @@
+# Template file for 'velotype'
+pkgname=velotype
+version=0.7.8
+revision=1
+_commit=07a24a9b5b953539dede8e61a1f7d9d0adbba590
+wrksrc="${pkgname}-${_commit}"
+build_style=cargo
+make_check=no
+hostmakedepends="pkg-config cmake clang wayland-protocols rust-sccache"
+# Wayland-only runtime: X11 headers and client libraries are intentionally absent.
+makedepends="fontconfig-devel freetype-devel openssl-devel
+ libxkbcommon-devel wayland-devel
+ MesaLib-devel libglvnd-devel vulkan-loader-devel"
+short_desc="Native Markdown editor built with Rust and GPUI"
+maintainer="Azuuuuure222"
+license="Apache-2.0"
+homepage="https://github.com/manyougz/velotype"
+distfiles="${homepage}/archive/${_commit}.tar.gz"
+checksum=75c190c578b8dda567a6eca8ed0ad1568cd714b7f90d1966e98b2141608a5d48
+
+# Tuned specifically for the target Intel Core i3-6100U (Skylake).
+# Do not distribute this binary to pre-Skylake x86_64 systems.
+case "$XBPS_TARGET_MACHINE" in
+	x86_64-musl) ;;
+	*) broken="only supported on x86_64-musl / Intel Skylake" ;;
+esac
+
+# Velotype 0.7.8 uses gpui-pre-platform 0.3.9. Its upstream dependency
+# enables both X11 and Wayland. Disable defaults and select Wayland explicitly.
+post_patch() {
+	local manifest default_platform wayland_platform default_count wayland_count
+	manifest="${wrksrc}/Cargo.toml"
+	default_platform='gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }'
+	wayland_platform='gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", default-features = false, features = ["font-kit", "wayland", "runtime_shaders"] }'
+
+	if [ ! -f "$manifest" ]; then
+		echo "velotype: missing upstream Cargo.toml: $manifest" >&2
+		return 1
+	fi
+
+	default_count="$(grep -Fc "$default_platform" "$manifest" || true)"
+	wayland_count="$(grep -Fc "$wayland_platform" "$manifest" || true)"
+	if [ "$default_count" -eq 1 ] && [ "$wayland_count" -eq 0 ]; then
+		if ! sed -i 's|^gpui_platform = .*features = \["font-kit", "x11", "wayland", "runtime_shaders"\].*$|gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9", default-features = false, features = ["font-kit", "wayland", "runtime_shaders"] }|' "$manifest"; then
+			echo "velotype: could not set GPUI platform to Wayland-only features" >&2
+			return 1
+		fi
+	elif [ "$default_count" -eq 0 ] && [ "$wayland_count" -eq 1 ]; then
+		# Idempotent if the package patch step is re-entered.
+		:
+	else
+		echo "velotype: Cargo.toml GPUI platform dependency differs from the reviewed upstream context" >&2
+		return 1
+	fi
+
+	if ! grep -Fxq "$wayland_platform" "$manifest"; then
+		echo "velotype: Wayland-only GPUI platform manifest patch did not persist" >&2
+		return 1
+	fi
+
+	# Dropping X11 changes Cargo's resolved feature graph. Refresh only this
+	# exact platform package so the following --locked fetch/build can proceed.
+	if ! cargo update --manifest-path "$manifest" -p "gpui-pre-platform@0.3.9"; then
+		echo "velotype: could not refresh Cargo.lock for Wayland-only platform features" >&2
+		return 1
+	fi
+}
+
+_velotype_assert_wayland_only() {
+	local tree_file
+	tree_file="$(mktemp "${wrksrc}/.cargo-tree-wayland.XXXXXX")"
+	if ! CARGO_TERM_COLOR=never cargo tree --locked --manifest-path "${wrksrc}/Cargo.toml" --target "$RUST_TARGET" -e normal,build,features > "$tree_file"; then
+		echo "velotype: unable to inspect the locked Cargo feature graph" >&2
+		rm -f -- "$tree_file"
+		return 1
+	fi
+
+	if ! grep -Fq 'gpui-pre-platform feature "wayland"' "$tree_file"; then
+		echo "velotype: GPUI Wayland feature is not active in the resolved dependency graph" >&2
+		rm -f -- "$tree_file"
+		return 1
+	fi
+	if grep -Fq 'gpui-pre-platform feature "x11"' "$tree_file" ||
+	   grep -Fq 'xkbcommon feature "x11"' "$tree_file" ||
+	   grep -Eq '(^|[[:space:]])(as-raw-xcb-connection|x11|x11-clipboard|x11-dl|x11rb|x11rb-protocol|xcb|xim-ctext|xim-parser|zed-xim)([[:space:]]|$)' "$tree_file"; then
+		echo "velotype: X11 features or dependencies remain in the resolved Cargo graph" >&2
+		grep -E 'x11|xcb|zed-xim|xim' "$tree_file" >&2 || true
+		rm -f -- "$tree_file"
+		return 1
+	fi
+	rm -f -- "$tree_file"
+}
+
+# Honour the build runner's real resource limits, not the target device's
+# CPU count. A release link can spike memory, so reserve 2 GiB for the OS/linker
+# and budget up to 3 GiB per parallel Cargo job.
+_velotype_available_memory_kib() {
+	local memory_kib limit_bytes limit_kib
+	memory_kib="$(awk '$1 == "MemTotal:" { print $2; exit }' /proc/meminfo 2>/dev/null || true)"
+	case "$memory_kib" in
+		''|*[!0-9]*) memory_kib=0 ;;
+	esac
+
+	if [ -r /sys/fs/cgroup/memory.max ]; then
+		limit_bytes="$(cat /sys/fs/cgroup/memory.max)"
+	elif [ -r /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+		limit_bytes="$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)"
+	else
+		limit_bytes=
+	fi
+	case "$limit_bytes" in
+		''|max|*[!0-9]*) ;;
+		*)
+			limit_kib=$((limit_bytes / 1024))
+			if [ "$memory_kib" -eq 0 ] || [ "$limit_kib" -lt "$memory_kib" ]; then
+				memory_kib="$limit_kib"
+			fi
+			;;
+	esac
+	printf '%s\n' "$memory_kib"
+}
+
+_velotype_calculate_cargo_jobs() {
+	local cpu_count memory_kib memory_jobs
+	cpu_count="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || printf '1')"
+	case "$cpu_count" in
+		''|*[!0-9]*|0) cpu_count=1 ;;
+	esac
+	memory_kib="$(_velotype_available_memory_kib)"
+	case "$memory_kib" in
+		''|*[!0-9]*|0) ;;
+		*)
+			memory_jobs=$(((memory_kib - 2097152) / 3145728))
+			[ "$memory_jobs" -ge 1 ] || memory_jobs=1
+			[ "$memory_jobs" -le "$cpu_count" ] || memory_jobs="$cpu_count"
+			cpu_count="$memory_jobs"
+			;;
+	esac
+	printf '%s\n' "$cpu_count"
+}
+
+_velotype_set_build_env() {
+	local visible_cpus memory_limit_kib
+	# Keep target tuning applied if install recompiles in a separate phase.
+	case " ${CFLAGS:-}" in
+		*" -O2 -march=skylake") ;;
+		*) export CFLAGS="${CFLAGS:-} -O2 -march=skylake" ;;
+	esac
+	case " ${CXXFLAGS:-}" in
+		*" -O2 -march=skylake") ;;
+		*) export CXXFLAGS="${CXXFLAGS:-} -O2 -march=skylake" ;;
+	esac
+	case " ${RUSTFLAGS:-}" in
+		*" -C target-cpu=skylake") ;;
+		*) export RUSTFLAGS="${RUSTFLAGS:-} -C target-cpu=skylake" ;;
+	esac
+	# Favor CPU throughput in the interactive editor on the Skylake target.
+	# Upstream's size-focused release profile is overridden to opt-level 3;
+	# full LTO, one codegen unit, panic=abort, and symbol stripping remain.
+	export CARGO_PROFILE_RELEASE_OPT_LEVEL=3
+	# Cache supported rustc invocations across CI runs.
+	export RUSTC_WRAPPER=sccache
+	export SCCACHE_DIR="${CARGO_HOME:-/host/cargo}/sccache"
+	export SCCACHE_CACHE_SIZE=2G
+
+	# Use all available runner CPUs unless memory is the tighter constraint.
+	# Respect an explicit positive CARGO_BUILD_JOBS override.
+	if [ -z "${CARGO_BUILD_JOBS:-}" ]; then
+		export CARGO_BUILD_JOBS="$(_velotype_calculate_cargo_jobs)" || return $?
+	fi
+	case "$CARGO_BUILD_JOBS" in
+		''|*[!0-9]*|0)
+			echo "velotype: CARGO_BUILD_JOBS must be a positive integer" >&2
+			return 1
+			;;
+	esac
+	visible_cpus="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || printf 'unknown')"
+	memory_limit_kib="$(_velotype_available_memory_kib)"
+	printf 'velotype: Cargo parallelism: %s jobs; visible CPUs: %s; memory limit: %s MiB\n' \
+		"$CARGO_BUILD_JOBS" "$visible_cpus" "$((memory_limit_kib / 1024))" >&2
+}
+
+do_build() {
+	: ${make_cmd:=cargo auditable}
+	: ${make_verbose:=-v}
+
+	_velotype_set_build_env
+
+	# v0.7.8 no longer locks the previous xattr 0.2.3 dependency, so no
+	# Cargo-registry source mutation is needed for musl compatibility.
+	cargo fetch --locked --manifest-path "${wrksrc}/Cargo.toml" --target "${RUST_TARGET}" || return $?
+	_velotype_assert_wayland_only || return $?
+
+	if ${make_cmd} build ${XBPS_VERBOSE+${make_verbose}} --release --locked --target "${RUST_TARGET}" \
+		${configure_args} ${make_build_args}; then
+		return 0
+	else
+		build_status=$?
+		return "$build_status"
+	fi
+}
+
+# Reuse the auditable release binary from do_build instead of recompiling via
+# cargo install in a separate target directory.
+do_install() {
+	local binary destination
+	binary="${wrksrc}/target/${RUST_TARGET}/release/velotype"
+	destination="${DESTDIR}/usr/bin/velotype"
+
+	if [ ! -x "$binary" ]; then
+		echo "velotype: expected built executable not found: $binary" >&2
+		return 1
+	fi
+	if ! mkdir -p "${DESTDIR}/usr/bin"; then
+		echo "velotype: could not create package binary directory" >&2
+		return 1
+	fi
+	if ! install -m 0755 "$binary" "$destination"; then
+		echo "velotype: failed to install the prebuilt executable" >&2
+		return 1
+	fi
+}
+
+post_install() {
+	binary="${DESTDIR}/usr/bin/velotype"
+	if [ ! -x "$binary" ]; then
+		echo "velotype: expected installed executable not found: $binary" >&2
+		return 1
+	fi
+	if ! command -v readelf >/dev/null 2>&1; then
+		echo "velotype: readelf is required to validate Wayland-only linkage" >&2
+		return 1
+	fi
+	if readelf -d "$binary" | grep -Eq 'Shared library: \[(libX[^]]*\.so|libxcb\.so|libxkbcommon-x11\.so)'; then
+		echo "velotype: executable still has a direct X11 shared-library dependency" >&2
+		return 1
+	fi
+
+	vlicense LICENSE-APACHE
+	vdoc README.md
+	vinstall resources/linux/com.manyougz.Velotype.desktop 644 usr/share/applications
+	vinstall resources/linux/icons/hicolor/256x256/apps/com.manyougz.Velotype.png 644 \
+		usr/share/icons/hicolor/256x256/apps
+	vinstall resources/linux/icons/hicolor/512x512/apps/com.manyougz.Velotype.png 644 \
+		usr/share/icons/hicolor/512x512/apps
+}
