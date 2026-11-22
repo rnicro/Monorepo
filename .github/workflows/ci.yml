@@ -80,9 +80,6 @@ jobs:
       - name: Validate pinned LibreWolf source fallbacks
         run: bash maint/librewolf/scripts/prepare-source-fallbacks.sh
 
-      - name: Validate LibreWolf package template
-        run: bash maint/librewolf/scripts/test-template.sh
-
       - name: Validate all package templates
         shell: bash
         run: |
