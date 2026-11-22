@@ -10,6 +10,6 @@ This monorepo consolidates the XBPS package content from the following rnicro re
 - [velotype](https://github.com/rnicro/velotype) → `srcpkgs/velotype`
 - [wlsunset](https://github.com/rnicro/wlsunset) → `srcpkgs/wlsunset`
 
-The original package documentation is retained in `docs/packages/`. Package validation and source preparation tools remain under `maint/<package>/`. Old per-repository release automation was removed; manual builds upload XBPS artifacts through the consolidated `.github/workflows/ci.yml` workflow.
+The original package documentation is retained in `docs/packages/`. Each package has a `maint/<package>/scripts/test-template.sh` validation entry point; focused tests and source-preparation helpers remain beside it. Manual builds sign and publish package archives to the persistent `xbps-repository` GitHub Release using the consolidated `.github/workflows/ci.yml` workflow.
 
 The `setup` and `drivers` repositories are intentionally excluded. The latter contained only a placeholder README at the time of consolidation.
