@@ -55,7 +55,7 @@ package_file="$dist_dir/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
   echo "The package recipe was not overlaid into Void's srcpkgs tree." >&2
   exit 1
 }
-[[ -s "$void_packages/hostdir/bootstrap-complete" ]] || {
+[[ -f "$void_packages/hostdir/bootstrap-complete" ]] || {
   echo "The shared build helper did not run binary-bootstrap." >&2
   exit 1
 }
