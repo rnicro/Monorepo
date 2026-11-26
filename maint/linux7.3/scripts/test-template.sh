@@ -17,7 +17,7 @@ grep -Fq 'dotconfig-custom' "$template"
 grep -Fq 'validate-config.sh' "$template"
 
 checksums="$(sed -n '/^checksum="/,/"/p' "$template" | grep -Eo '[0-9a-f]{64}')"
-[[ "$(printf '%s\\n' "$checksums" | wc -l)" -eq 2 ]]
+[[ "$(printf '%s\n' "$checksums" | wc -l)" -eq 2 ]]
 grep -Fq '87363c24f10e06321eb362765521094e94471f6bff8bce2d6b3e40f39f004953' <<< "$checksums"
 grep -Fq '11f630161b995ae31bbf79e9056e22b291bd47a389c9ad542091b4f342616718' <<< "$checksums"
 

@@ -43,6 +43,8 @@ The shared workflow maintains these caches:
 - **Source archives:** cached per package. Velotype's source helper checks the pinned SHA-256 before reusing an archive.
 - **Compiler caches:** Velotype's Cargo registry/sccache and niri's Cargo registry are cached separately from the common Void caches. LibreWolf's sccache/PGO data is also cached separately.
 
+On Ubuntu 24.04 GitHub-hosted runners, the shared build workflow temporarily relaxes AppArmor's unprivileged-user-namespace restriction because `xbps-src` requires rootless namespaces for its build chroot. This setting applies only to that ephemeral runner job, not to the installed Void system.
+
 GitHub Actions caches are an optimization, not a build input. Deleting a cache must only make the next build slower, never change which source versions are selected or bypass checksum verification.
 
 ## What to update when changing the build

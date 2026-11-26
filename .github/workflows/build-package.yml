@@ -68,6 +68,16 @@ jobs:
           test -x /opt/xbps/usr/bin/xbps-install
           echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
 
+      # xbps-src uses unprivileged user namespaces for its chroot setup.
+      # GitHub-hosted Ubuntu 24.04 enables AppArmor mediation of userns by
+      # default; this runner is ephemeral, so relax that host-only restriction
+      # for the duration of this package build job.
+      - name: Allow rootless xbps-src user namespaces
+        run: |
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       # Source archives are checksum-verified by xbps-src or the package helper.
       - name: Restore package source cache
         uses: actions/cache@v4
