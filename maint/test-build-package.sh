@@ -32,6 +32,15 @@ case "$*" in
     output="hostdir/binpkgs/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
     printf '%s\n' 'mock package for brightnessctl' > "$output"
     ;;
+  "-A x86_64-musl pkg linux7.3")
+    test -f hostdir/bootstrap-complete
+    version="$(sed -n 's/^version=//p' "$XBPS_TEST_REPO_ROOT/srcpkgs/linux7.3/template")"
+    revision="$(sed -n 's/^revision=//p' "$XBPS_TEST_REPO_ROOT/srcpkgs/linux7.3/template")"
+    printf '%s\n' 'mock kernel package' > \
+      "hostdir/binpkgs/linux7.3-${version}_${revision}.x86_64-musl.xbps"
+    printf '%s\n' 'mock kernel headers package' > \
+      "hostdir/binpkgs/linux7.3-headers-${version}_${revision}.x86_64-musl.xbps"
+    ;;
   *)
     echo "unexpected xbps-src arguments: $*" >&2
     exit 64
@@ -45,28 +54,25 @@ export XBPS_TARGET_ARCH=x86_64-musl
 export DIST_DIR="$dist_dir"
 export XBPS_TEST_REPO_ROOT="$repo_root"
 
+# A simple single-output utility validates the common overlay/build path.
 bash "$repo_root/maint/build-package.sh" brightnessctl "$void_packages"
-
 version="$(sed -n 's/^version=//p' "$repo_root/srcpkgs/brightnessctl/template")"
 revision="$(sed -n 's/^revision=//p' "$repo_root/srcpkgs/brightnessctl/template")"
-package_file="$dist_dir/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
+brightnessctl_file="$dist_dir/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
+[[ -s "$void_packages/srcpkgs/brightnessctl/template" ]]
+[[ -f "$void_packages/hostdir/bootstrap-complete" ]]
+[[ -s "$brightnessctl_file" ]]
+grep -Fq 'mock package for brightnessctl' "$brightnessctl_file"
 
-[[ -s "$void_packages/srcpkgs/brightnessctl/template" ]] || {
-  echo "The package recipe was not overlaid into Void's srcpkgs tree." >&2
-  exit 1
-}
-[[ -f "$void_packages/hostdir/bootstrap-complete" ]] || {
-  echo "The shared build helper did not run binary-bootstrap." >&2
-  exit 1
-}
-[[ -s "$package_file" ]] || {
-  echo "The package archive was not copied to dist/: $package_file" >&2
-  find "$dist_dir" -maxdepth 1 -type f -print >&2
-  exit 1
-}
-grep -Fq 'mock package for brightnessctl' "$package_file" || {
-  echo "The copied package artifact does not contain the expected test payload." >&2
-  exit 1
-}
+# The kernel recipe emits two versioned packages; both must reach the artifact directory.
+bash "$repo_root/maint/build-package.sh" linux7.3 "$void_packages"
+version="$(sed -n 's/^version=//p' "$repo_root/srcpkgs/linux7.3/template")"
+revision="$(sed -n 's/^revision=//p' "$repo_root/srcpkgs/linux7.3/template")"
+kernel_file="$dist_dir/linux7.3-${version}_${revision}.x86_64-musl.xbps"
+headers_file="$dist_dir/linux7.3-headers-${version}_${revision}.x86_64-musl.xbps"
+[[ -s "$kernel_file" ]]
+[[ -s "$headers_file" ]]
+grep -Fq 'mock kernel package' "$kernel_file"
+grep -Fq 'mock kernel headers package' "$headers_file"
 
-echo "shared build helper overlay/bootstrap/artifact test passed"
+echo "shared build helper overlay/bootstrap/artifact tests passed"
