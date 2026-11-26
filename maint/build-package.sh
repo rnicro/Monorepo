@@ -83,12 +83,22 @@ esac
 # linux7.3 can produce both kernel and headers archives; retain every package output.
 mkdir -p "$dist_dir"
 rm -f -- "$dist_dir"/"$package"-*.xbps
-mapfile -d '' outputs < <(
-  find "$void_packages/hostdir/binpkgs" -type f -name "$package-*.xbps" -print0
+package_version="$(sed -n 's/^version=//p' "srcpkgs/$package/template")"
+package_revision="$(sed -n 's/^revision=//p' "srcpkgs/$package/template")"
+shopt -s nullglob
+outputs=(
+  "$void_packages/hostdir/binpkgs/$package-${package_version}_${package_revision}".*.xbps
 )
+if [[ "$package" == linux7.3 ]]; then
+  outputs+=(
+    "$void_packages/hostdir/binpkgs/linux7.3-headers-${package_version}_${package_revision}".*.xbps
+  )
+fi
+shopt -u nullglob
+
 if (( ${#outputs[@]} == 0 )); then
-  echo "No XBPS package output found for $package." >&2
-  find "$void_packages/hostdir/binpkgs" -type f -name '*.xbps' -print >&2
+  echo "No XBPS output found for $package version $package_version revision $package_revision." >&2
+  find "$void_packages/hostdir/binpkgs" -type f -name "$package*.xbps" -print >&2
   exit 1
 fi
 cp -- "${outputs[@]}" "$dist_dir/"

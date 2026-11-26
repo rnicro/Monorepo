@@ -82,9 +82,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: void-packages/hostdir/binpkgs
-          key: xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-${{ github.run_id }}
+          key: xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ inputs.package }}-${{ steps.void-revision.outputs.commit }}-${{ github.run_id }}
           restore-keys: |
-            xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-
+            xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ inputs.package }}-${{ steps.void-revision.outputs.commit }}-
 
       # Velotype's Cargo registry and sccache are separate from the common Void caches.
       - name: Restore Velotype Cargo cache

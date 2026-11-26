@@ -37,7 +37,7 @@ Each `Build <package>` workflow calls the shared `.github/workflows/build-packag
 The shared workflow maintains these caches:
 
 - **Static xbps tools:** one stable cache key for all packages, at `/opt/xbps`. Only a cache miss downloads and extracts `xbps-static`. Bump the `xbps-static` cache-key version in the shared workflow when intentionally refreshing the cached toolchain.
-- **Void build dependencies:** binary packages are cached for the exact Void `master` commit and target architecture. A different Void commit gets a separate cache; stale binary packages are not restored across commits.
+- **Void build dependencies:** binary packages are cached per package for the exact Void `master` commit and target architecture. A different Void commit gets a separate cache; stale binary packages are not restored across commits.
 - **Source archives:** cached per package. Velotype's source helper checks the pinned SHA-256 before reusing an archive.
 - **Compiler caches:** Velotype's Cargo registry/sccache and LibreWolf's sccache/PGO data are cached separately.
 
