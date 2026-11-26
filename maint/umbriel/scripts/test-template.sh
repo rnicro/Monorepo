@@ -18,6 +18,6 @@ grep -Fq 'libei-devel' "$template"
 grep -Fq -- '-Djemalloc=disabled' "$template"
 grep -Fq -- '-Dlocaled=disabled' "$template"
 grep -Fq 'archs="x86_64-musl"' "$template"
-grep -Fq 'checksum verification is skipped' "$guide"
+grep -Fq 'verification is skipped for this one archive.' "$guide"
 
 echo "Umbriel immutable source pin, wlroots ABI and musl options checks passed"
