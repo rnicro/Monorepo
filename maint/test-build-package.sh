@@ -19,6 +19,7 @@ chmod +x "$fake_bin/xbps-install"
 cat > "$void_packages/xbps-src" <<'XBPS_SRC'
 #!/usr/bin/env bash
 set -euo pipefail
+
 case "$*" in
   "-A x86_64-musl binary-bootstrap")
     mkdir -p hostdir/binpkgs
@@ -28,7 +29,8 @@ case "$*" in
     test -f hostdir/bootstrap-complete
     version="$(sed -n 's/^version=//p' "$XBPS_TEST_REPO_ROOT/srcpkgs/brightnessctl/template")"
     revision="$(sed -n 's/^revision=//p' "$XBPS_TEST_REPO_ROOT/srcpkgs/brightnessctl/template")"
-    printf 'mock package for brightnessctl\n' >       "hostdir/binpkgs/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
+    output="hostdir/binpkgs/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
+    printf '%s\n' 'mock package for brightnessctl' > "$output"
     ;;
   *)
     echo "unexpected xbps-src arguments: $*" >&2
@@ -38,15 +40,33 @@ esac
 XBPS_SRC
 chmod +x "$void_packages/xbps-src"
 
-PATH="$fake_bin:$PATH" XBPS_TARGET_ARCH=x86_64-musl DIST_DIR="$dist_dir" XBPS_TEST_REPO_ROOT="$repo_root"   bash "$repo_root/maint/build-package.sh" brightnessctl "$void_packages"
+export PATH="$fake_bin:$PATH"
+export XBPS_TARGET_ARCH=x86_64-musl
+export DIST_DIR="$dist_dir"
+export XBPS_TEST_REPO_ROOT="$repo_root"
+
+bash "$repo_root/maint/build-package.sh" brightnessctl "$void_packages"
 
 version="$(sed -n 's/^version=//p' "$repo_root/srcpkgs/brightnessctl/template")"
 revision="$(sed -n 's/^revision=//p' "$repo_root/srcpkgs/brightnessctl/template")"
 package_file="$dist_dir/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
 
-test -s "$void_packages/srcpkgs/brightnessctl/template"
-test -s "$void_packages/hostdir/bootstrap-complete"
-test -s "$package_file"
-grep -Fq 'mock package for brightnessctl' "$package_file"
+[[ -s "$void_packages/srcpkgs/brightnessctl/template" ]] || {
+  echo "The package recipe was not overlaid into Void's srcpkgs tree." >&2
+  exit 1
+}
+[[ -s "$void_packages/hostdir/bootstrap-complete" ]] || {
+  echo "The shared build helper did not run binary-bootstrap." >&2
+  exit 1
+}
+[[ -s "$package_file" ]] || {
+  echo "The package archive was not copied to dist/: $package_file" >&2
+  find "$dist_dir" -maxdepth 1 -type f -print >&2
+  exit 1
+}
+grep -Fq 'mock package for brightnessctl' "$package_file" || {
+  echo "The copied package artifact does not contain the expected test payload." >&2
+  exit 1
+}
 
 echo "shared build helper overlay/bootstrap/artifact test passed"
