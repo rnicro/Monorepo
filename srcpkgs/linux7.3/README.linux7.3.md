@@ -6,14 +6,14 @@ Hardware-specific Linux kernel and headers package for the HP Pavilion x360 Conv
 
 | Field | Value |
 | --- | --- |
-| Upstream version | `7.3.5` |
+| Upstream version | `7.3.6` |
 | Package revision | `1` |
 | Target | `x86_64-musl` |
 | CPU baseline | Intel Skylake |
 | Source | [Linux kernel releases](https://www.kernel.org/) |
 | Configuration | [x86_64-dotconfig-custom](files/x86_64-dotconfig-custom) |
 
-The recipe, kernel configuration, downstream patches, debug helper and configuration validator are all stored in this package directory. The kernel compiler flags target Skylake; they are not selected from the GitHub runner's CPU.
+Linux 7.3.6 was published on November 23, 2026. The recipe uses the unchanged 7.3 base archive plus the 7.3.6 incremental stable patch; both SHA-256 digests are sourced from kernel.org's signed [checksum list](https://kernel.org/pub/linux/kernel/v7.x/sha256sums.asc). The recipe, kernel configuration, downstream patches, debug helper and configuration validator are all stored in this package directory. The kernel compiler flags target Skylake; they are not selected from the GitHub runner's CPU.
 
 The custom configuration is specific to the reference laptop: Intel HD Graphics 520, Intel Wireless 3165, Realtek RTL810xE Ethernet, Skylake audio, ELAN touchscreen, Synaptics touchpad, HP sensors and the built-in SATA/ext4 boot path. It is not a general-purpose kernel configuration. Review the configuration and hardware notes before installing it on another machine.
 

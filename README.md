@@ -10,9 +10,13 @@ An XBPS source-package collection for Void Linux. The recipes are maintained in 
 | --- | --- | --- | --- |
 | [aria2](srcpkgs/aria2/) | CLI-only downloader; OpenSSL and Skylake tuning | [README](srcpkgs/aria2/README.aria2.md) | [Build](.github/workflows/build-aria2.yml) |
 | [brightnessctl](srcpkgs/brightnessctl/) | Brightness and LED control utility | [README](srcpkgs/brightnessctl/README.brightnessctl.md) | [Build](.github/workflows/build-brightnessctl.yml) |
+| [labwc](srcpkgs/labwc/) | Stacking Wayland compositor; wlroots 0.20 | [README](srcpkgs/labwc/README.labwc.md) | [Build](.github/workflows/build-labwc.yml) |
 | [librewolf](srcpkgs/librewolf/) | Native Wayland browser build | [README](srcpkgs/librewolf/README.librewolf.md) | [Build](.github/workflows/build-librewolf.yml) |
 | [linux7.3](srcpkgs/linux7.3/) | Device-specific Linux kernel and headers | [README](srcpkgs/linux7.3/README.linux7.3.md) | [Build](.github/workflows/build-linux7.3.yml) |
+| [niri](srcpkgs/niri/) | Scrollable-tiling Wayland compositor | [README](srcpkgs/niri/README.niri.md) | [Build](.github/workflows/build-niri.yml) |
+| [noctalia](srcpkgs/noctalia/) | Customizable Wayland desktop shell | [README](srcpkgs/noctalia/README.noctalia.md) | [Build](.github/workflows/build-noctalia.yml) |
 | [tofi](srcpkgs/tofi/) | Wayland launcher; Meson and LTO | [README](srcpkgs/tofi/README.tofi.md) | [Build](.github/workflows/build-tofi.yml) |
+| [umbriel](srcpkgs/umbriel/) | Wayland compositor built on wlroots 0.20 | [README](srcpkgs/umbriel/README.umbriel.md) | [Build](.github/workflows/build-umbriel.yml) |
 | [velotype](srcpkgs/velotype/) | Native Rust/GPUI Markdown editor | [README](srcpkgs/velotype/README.velotype.md) | [Build](.github/workflows/build-velotype.yml) |
 | [wlsunset](srcpkgs/wlsunset/) | Wayland colour-temperature utility | [README](srcpkgs/wlsunset/README.wlsunset.md) | [Build](.github/workflows/build-wlsunset.yml) |
 

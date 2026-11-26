@@ -20,7 +20,7 @@ usage() {
 }
 
 case "$package" in
-  aria2|brightnessctl|librewolf|linux7.3|tofi|velotype|wlsunset) ;;
+  aria2|brightnessctl|labwc|librewolf|linux7.3|niri|noctalia|tofi|umbriel|velotype|wlsunset) ;;
   *) usage ;;
 esac
 

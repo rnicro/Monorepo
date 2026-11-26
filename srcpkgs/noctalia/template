@@ -1,0 +1,41 @@
+# Template file for 'noctalia'
+pkgname=noctalia
+version=5.6.0
+revision=1
+wrksrc=noctalia-release
+build_style=meson
+build_helper="qemu"
+configure_args="-Dbuildtype=release -Db_lto=true -Dtests=disabled
+ -Djemalloc=disabled -Dnative_optimizations=false"
+hostmakedepends="meson ninja pkg-config wayland-devel wayland-protocols"
+makedepends="basu-devel cairo-devel fontconfig-devel freetype-devel glib-devel
+ harfbuzz-devel json-c++ libepoxy-devel libglvnd-devel libical-devel
+ libjxl-devel libqalculate-devel libcurl-devel libsecret-devel libsodium-devel
+ libsndfile-devel libwebp-devel libxml2-devel librsvg-devel md4c-devel
+ MesaLib-devel pam-devel pango-devel polkit-devel sdbus-c++-devel stb
+ tomlplusplus-devel wireplumber-devel pipewire-devel libxkbcommon-devel
+ wayland-devel wayland-protocols"
+depends="pipewire wireplumber"
+short_desc="A sleek, customizable desktop shell crafted for Wayland"
+maintainer="rnicro <nocontact@nomail.org>"
+license="MIT"
+homepage="https://github.com/noctalia-dev/noctalia"
+changelog="https://github.com/noctalia-dev/noctalia/releases"
+distfiles="https://github.com/noctalia-dev/noctalia/releases/download/v${version}/noctalia-v${version}.tar.gz"
+checksum=13389cfe443dcb1c0af351b0826df762b08cccabeeea9d6daf7ed1bfb2e7c855
+
+archs="x86_64-musl"
+lib32disabled=yes
+make_check=no
+
+post_install() {
+	vlicense LICENSE
+	vdoc PACKAGING.md
+
+	# Upstream generates shell completions from the built executable.
+	for shell in bash fish zsh; do
+		vtargetrun "${DESTDIR}/usr/bin/noctalia" completions "${shell}" > \
+			"${workdir}/noctalia.${shell}"
+		vcompletion "${workdir}/noctalia.${shell}" "${shell}"
+	done
+}

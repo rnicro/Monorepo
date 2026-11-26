@@ -1,0 +1,34 @@
+# Template file for 'umbriel'
+pkgname=umbriel
+version=0.1.0
+revision=1
+_commit=ac682123129817d5ed91495efc15f48503a42cc0
+wrksrc="${pkgname}-${_commit}"
+build_style=meson
+configure_args="-Dbuildtype=release -Db_lto=true -Dtests=disabled
+ -Djemalloc=disabled -Dlocaled=disabled"
+hostmakedepends="meson ninja pkg-config wayland-devel wayland-protocols"
+makedepends="cairo-devel eudev-libudev-devel lcms2-devel libdisplay-info-devel
+ libdrm-devel libei-devel libgbm-devel libinput-devel libxkbcommon-devel
+ libxcb-devel pango-devel pixman-devel tomlplusplus-devel json-c++
+ wlroots0.20-devel xcb-util-wm-devel wayland-devel wayland-protocols"
+depends="xorg-server-xwayland"
+short_desc="A Wayland compositor built on wlroots"
+maintainer="rnicro <nocontact@nomail.org>"
+license="MIT"
+homepage="https://github.com/noctalia-dev/umbriel"
+changelog="https://github.com/noctalia-dev/umbriel/commits/main"
+distfiles="${homepage}/archive/${_commit}.tar.gz"
+
+# Upstream has not published a release archive. Pin the GitHub archive URL to
+# this immutable commit instead of following the moving main branch.
+checksum=SKIP
+
+archs="x86_64-musl"
+lib32disabled=yes
+make_check=no
+
+post_install() {
+	vlicense LICENSE
+	vdoc PACKAGING.md
+}

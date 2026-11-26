@@ -34,9 +34,13 @@ on:
           - all
           - aria2
           - brightnessctl
+          - labwc
           - librewolf
           - linux7.3
+          - niri
+          - noctalia
           - tofi
+          - umbriel
           - velotype
           - wlsunset
 
@@ -86,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for package in aria2 brightnessctl librewolf linux7.3 tofi velotype wlsunset; do
+          for package in aria2 brightnessctl labwc librewolf linux7.3 niri noctalia tofi umbriel velotype wlsunset; do
             echo "::group::$package"
             bash "maint/$package/scripts/test-template.sh"
             echo "::endgroup::"
@@ -105,7 +109,7 @@ jobs:
           set -euo pipefail
           bash -n maint/build-package.sh
           bash maint/test-build-package.sh
-          for package in aria2 brightnessctl librewolf linux7.3 tofi velotype wlsunset; do
+          for package in aria2 brightnessctl labwc librewolf linux7.3 niri noctalia tofi umbriel velotype wlsunset; do
             test -s "srcpkgs/$package/README.$package.md"
             test -s "srcpkgs/$package/template"
           done
@@ -119,7 +123,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        package: ${{ fromJSON(inputs.package == 'all' && '["aria2","brightnessctl","librewolf","linux7.3","tofi","velotype","wlsunset"]' || format('["{0}"]', inputs.package)) }}
+        package: ${{ fromJSON(inputs.package == 'all' && '["aria2","brightnessctl","labwc","librewolf","linux7.3","niri","noctalia","tofi","umbriel","velotype","wlsunset"]' || format('["{0}"]', inputs.package)) }}
     uses: ./.github/workflows/build-package.yml
     with:
       package: ${{ matrix.package }}
