@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Exercise the shared build entry point without network access or a real compiler.
+repo_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+tmp="$(mktemp -d)"
+trap 'rm -rf -- "$tmp"' EXIT
+fake_bin="$tmp/bin"
+void_packages="$tmp/void-packages"
+dist_dir="$tmp/dist"
+mkdir -p "$fake_bin" "$void_packages/hostdir" "$dist_dir"
+
+cat > "$fake_bin/xbps-install" <<'XBPS_INSTALL'
+#!/bin/sh
+exit 0
+XBPS_INSTALL
+chmod +x "$fake_bin/xbps-install"
+
+cat > "$void_packages/xbps-src" <<'XBPS_SRC'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  "-A x86_64-musl binary-bootstrap")
+    mkdir -p hostdir/binpkgs
+    : > hostdir/bootstrap-complete
+    ;;
+  "-A x86_64-musl pkg brightnessctl")
+    test -f hostdir/bootstrap-complete
+    version="$(sed -n 's/^version=//p' "$XBPS_TEST_REPO_ROOT/srcpkgs/brightnessctl/template")"
+    revision="$(sed -n 's/^revision=//p' "$XBPS_TEST_REPO_ROOT/srcpkgs/brightnessctl/template")"
+    printf 'mock package for brightnessctl\n' >       "hostdir/binpkgs/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
+    ;;
+  *)
+    echo "unexpected xbps-src arguments: $*" >&2
+    exit 64
+    ;;
+esac
+XBPS_SRC
+chmod +x "$void_packages/xbps-src"
+
+PATH="$fake_bin:$PATH" XBPS_TARGET_ARCH=x86_64-musl DIST_DIR="$dist_dir" XBPS_TEST_REPO_ROOT="$repo_root"   bash "$repo_root/maint/build-package.sh" brightnessctl "$void_packages"
+
+version="$(sed -n 's/^version=//p' "$repo_root/srcpkgs/brightnessctl/template")"
+revision="$(sed -n 's/^revision=//p' "$repo_root/srcpkgs/brightnessctl/template")"
+package_file="$dist_dir/brightnessctl-${version}_${revision}.x86_64-musl.xbps"
+
+test -s "$void_packages/srcpkgs/brightnessctl/template"
+test -s "$void_packages/hostdir/bootstrap-complete"
+test -s "$package_file"
+grep -Fq 'mock package for brightnessctl' "$package_file"
+
+echo "shared build helper overlay/bootstrap/artifact test passed"

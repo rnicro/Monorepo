@@ -6,6 +6,13 @@ repo_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 package="${1:-}"
 void_packages="${2:-"$repo_root/../void-packages"}"
 target_arch="${XBPS_TARGET_ARCH:-x86_64-musl}"
+dist_dir="${DIST_DIR:-$repo_root/dist}"
+
+# Resolve a relative Void path before changing to the repository root.
+if [[ "$void_packages" != /* ]]; then
+  void_parent="$(cd -- "$(dirname -- "$void_packages")" && pwd)"
+  void_packages="$void_parent/$(basename -- "$void_packages")"
+fi
 
 usage() {
   echo "Usage: bash maint/build-package.sh <package> [void-packages-directory]" >&2
@@ -74,8 +81,8 @@ esac
 )
 
 # linux7.3 can produce both kernel and headers archives; retain every package output.
-mkdir -p "$repo_root/dist"
-rm -f -- "$repo_root"/dist/"$package"-*.xbps
+mkdir -p "$dist_dir"
+rm -f -- "$dist_dir"/"$package"-*.xbps
 mapfile -d '' outputs < <(
   find "$void_packages/hostdir/binpkgs" -type f -name "$package-*.xbps" -print0
 )
@@ -84,7 +91,7 @@ if (( ${#outputs[@]} == 0 )); then
   find "$void_packages/hostdir/binpkgs" -type f -name '*.xbps' -print >&2
   exit 1
 fi
-cp -- "${outputs[@]}" "$repo_root/dist/"
+cp -- "${outputs[@]}" "$dist_dir/"
 
 printf 'Built %s for %s:\n' "$package" "$target_arch"
 printf '  %s\n' "${outputs[@]##*/}"

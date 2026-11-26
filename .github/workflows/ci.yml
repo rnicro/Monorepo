@@ -104,6 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           bash -n maint/build-package.sh
+          bash maint/test-build-package.sh
           for package in aria2 brightnessctl librewolf linux7.3 tofi velotype wlsunset; do
             test -s "srcpkgs/$package/README.$package.md"
             test -s "srcpkgs/$package/template"
