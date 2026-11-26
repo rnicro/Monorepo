@@ -1,4 +1,4 @@
-name: Build and publish one XBPS package
+name: Build one XBPS package
 
 on:
   workflow_call:
@@ -7,11 +7,6 @@ on:
         description: Package name from srcpkgs
         type: string
         required: true
-      publish:
-        description: Sign and publish the package to the shared XBPS repository
-        type: boolean
-        required: false
-        default: true
 
 permissions:
   contents: read
@@ -19,8 +14,9 @@ permissions:
 env:
   XBPS_TARGET_ARCH: x86_64-musl
 
+# Serialize builds of the same package/ref so their package caches are not written concurrently.
 concurrency:
-  group: rnicro-package-build-${{ inputs.package }}-${{ github.ref }}
+  group: xbps-build-${{ inputs.package }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -29,32 +25,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
-      - name: Check out package collection
+      - name: Check out this package collection
         uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - name: Validate selected package
-        shell: bash
-        env:
-          PACKAGE: ${{ inputs.package }}
-        run: |
-          set -euo pipefail
-          case "$PACKAGE" in
-            aria2|brightnessctl|librewolf|linux7.3|tofi|velotype|wlsunset) ;;
-            *)
-              echo "Unsupported package: $PACKAGE" >&2
-              exit 1
-              ;;
-          esac
-          bash -n "srcpkgs/$PACKAGE/template"
-          bash "maint/$PACKAGE/scripts/test-template.sh"
-          if [ "$PACKAGE" = "velotype" ]; then
-            bash maint/velotype/scripts/test-prepare-source.sh
-            bash maint/velotype/scripts/test-wayland-patch.sh
-          fi
-
-      - name: Check out upstream Void packages
+      - name: Check out upstream Void build tools
         uses: actions/checkout@v6
         with:
           repository: void-linux/void-packages
@@ -62,35 +38,21 @@ jobs:
           path: void-packages
           persist-credentials: false
 
-      - name: Prepare package-specific inputs
-        shell: bash
-        env:
-          PACKAGE: ${{ inputs.package }}
-        run: |
-          set -euo pipefail
-          case "$PACKAGE" in
-            velotype)
-              version="$(sed -n 's/^version=//p' srcpkgs/velotype/template)"
-              mkdir -p "void-packages/hostdir/sources/velotype-$version"
-              bash maint/velotype/scripts/prepare-source.sh \
-                "void-packages/hostdir/sources/velotype-$version"
-              ;;
-            librewolf)
-              bash maint/librewolf/scripts/prepare-source-fallbacks.sh
-              ;;
-          esac
+      - name: Record the Void source revision
+        id: void-revision
+        working-directory: void-packages
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Overlay selected package
-        shell: bash
-        env:
-          PACKAGE: ${{ inputs.package }}
-        run: |
-          set -euo pipefail
-          rm -rf "void-packages/srcpkgs/$PACKAGE"
-          mkdir -p "void-packages/srcpkgs/$PACKAGE"
-          cp -a "srcpkgs/$PACKAGE/." "void-packages/srcpkgs/$PACKAGE/"
+      # One stable key is shared by every package workflow. Bump v1 to refresh xbps-static.
+      - name: Restore shared xbps-static cache
+        id: xbps-static-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/xbps
+          key: xbps-static-${{ runner.os }}-x86_64-musl-v1
 
-      - name: Install static xbps
+      - name: Download xbps-static on cache miss
+        if: steps.xbps-static-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           mkdir -p /opt/xbps
@@ -100,114 +62,64 @@ jobs:
             https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
           tar -xJf /tmp/xbps-static.tar.xz -C /opt/xbps
           rm -f /tmp/xbps-static.tar.xz
+
+      - name: Add cached xbps tools to PATH
+        run: |
+          test -x /opt/xbps/usr/bin/xbps-install
           echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
 
-      - name: Bootstrap xbps-src
-        working-directory: void-packages
-        run: |
-          set -euo pipefail
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          cpu_jobs="$(nproc)"
-          available_kib="$(awk '/^MemAvailable:/ { print $2; exit }' /proc/meminfo)"
-          reserved_kib=$((1536 * 1024))
-          per_job_kib=$((3 * 1024 * 1024))
-          if [ "$available_kib" -gt "$reserved_kib" ]; then
-            memory_jobs=$(((available_kib - reserved_kib) / per_job_kib))
-          else
-            memory_jobs=1
-          fi
-          [ "$memory_jobs" -ge 1 ] || memory_jobs=1
-          build_jobs="$cpu_jobs"
-          [ "$memory_jobs" -ge "$build_jobs" ] || build_jobs="$memory_jobs"
-          printf 'XBPS_MAKEJOBS=%s\n' "$build_jobs" >> etc/conf
-          printf 'Using %s build jobs (%s CPUs; %s MiB available RAM).\n' \
-            "$build_jobs" "$cpu_jobs" "$((available_kib / 1024))"
-          ./xbps-src -A "$XBPS_TARGET_ARCH" binary-bootstrap
+      # Source archives are checksum-verified by xbps-src or the package helper.
+      - name: Restore package source cache
+        uses: actions/cache@v4
+        with:
+          path: void-packages/hostdir/sources
+          key: xbps-sources-${{ runner.os }}-${{ inputs.package }}-${{ hashFiles(format('srcpkgs/{0}/template', inputs.package)) }}-${{ github.run_id }}
+          restore-keys: |
+            xbps-sources-${{ runner.os }}-${{ inputs.package }}-
 
-      - name: Build selected package
-        working-directory: void-packages
-        shell: bash
+      # Binary dependencies are only reused with the same Void commit and target ABI.
+      - name: Restore Void binary-package cache
+        uses: actions/cache@v4
+        with:
+          path: void-packages/hostdir/binpkgs
+          key: xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-${{ github.run_id }}
+          restore-keys: |
+            xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-
+
+      # Velotype's Cargo registry and sccache are separate from the common Void caches.
+      - name: Restore Velotype Cargo cache
+        if: inputs.package == 'velotype'
+        uses: actions/cache@v4
+        with:
+          path: |
+            void-packages/hostdir/cargo/registry
+            void-packages/hostdir/cargo/sccache
+          key: velotype-cargo-${{ runner.os }}-${{ hashFiles('srcpkgs/velotype/template') }}-${{ github.run_id }}
+          restore-keys: |
+            velotype-cargo-${{ runner.os }}-${{ hashFiles('srcpkgs/velotype/template') }}-
+
+      # LibreWolf's template uses /host/sccache and /host/pgo-cache inside xbps-src.
+      - name: Restore LibreWolf compiler and PGO caches
+        if: inputs.package == 'librewolf'
+        uses: actions/cache@v4
+        with:
+          path: |
+            void-packages/hostdir/sccache
+            void-packages/hostdir/pgo-cache
+          key: librewolf-build-${{ runner.os }}-${{ hashFiles('srcpkgs/librewolf/template', 'srcpkgs/librewolf/files/**', 'srcpkgs/librewolf/patches/**') }}-${{ github.run_id }}
+          restore-keys: |
+            librewolf-build-${{ runner.os }}-${{ hashFiles('srcpkgs/librewolf/template', 'srcpkgs/librewolf/files/**', 'srcpkgs/librewolf/patches/**') }}-
+
+      - name: Validate and build package
         env:
           PACKAGE: ${{ inputs.package }}
-        run: |
-          set -euo pipefail
-          if [ "$PACKAGE" = "librewolf" ]; then
-            epoch="$(git -C "$GITHUB_WORKSPACE" log -1 --format=%ct -- srcpkgs/librewolf/template srcpkgs/librewolf/files srcpkgs/librewolf/patches)"
-            [[ "$epoch" =~ ^[0-9]+$ ]]
-            printf '%s\n' "$epoch" > hostdir/source-date-epoch
-            chmod 644 hostdir/source-date-epoch
-            ./xbps-src -A "$XBPS_TARGET_ARCH" -o pgo pkg "$PACKAGE"
-          else
-            ./xbps-src -A "$XBPS_TARGET_ARCH" pkg "$PACKAGE"
-          fi
-          mkdir -p "$GITHUB_WORKSPACE/dist"
-          mapfile -d '' packages < <(find hostdir/binpkgs -type f -name "$PACKAGE-*.xbps" -print0)
-          if [ "${#packages[@]}" -eq 0 ]; then
-            echo "No XBPS output found for $PACKAGE" >&2
-            find hostdir/binpkgs -type f -name '*.xbps' -print >&2
-            exit 1
-          fi
-          cp -- "${packages[@]}" "$GITHUB_WORKSPACE/dist/"
-          {
-            echo "## $PACKAGE build output"
-            echo
-            for package in "$GITHUB_WORKSPACE"/dist/*.xbps; do
-              printf -- "- %s (%s)\n" "$(basename "$package")" "$(du -h "$package" | cut -f1)"
-            done
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: bash maint/build-package.sh "$PACKAGE" "$GITHUB_WORKSPACE/void-packages"
 
-      - name: Upload XBPS package artifacts
+      - name: Upload XBPS package artifact
         uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.package }}-x86_64-musl
           path: dist/*.xbps
           if-no-files-found: error
           compression-level: 0
-          retention-days: 7
-
-  publish:
-    name: Sign and publish XBPS repository
-    needs: build
-    if: ${{ inputs.publish }}
-    concurrency:
-      group: rnicro-xbps-publish-${{ github.repository }}
-      cancel-in-progress: false
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
-      PRIV_KEY: ${{ secrets.PRIV_KEY }}
-      SIGN_PASS: ${{ secrets.SIGN_PASS }}
-      SIGNEDBY: ${{ vars.SIGNEDBY }}
-      REPOSITORY_TAG: xbps-repository
-    steps:
-      - name: Check out repository tools
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Download built package
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ inputs.package }}-x86_64-musl
-          path: incoming
-
-      - name: Install static xbps
-        run: |
-          set -euo pipefail
-          mkdir -p /opt/xbps
-          curl --fail --location --retry 5 --retry-all-errors \
-            --connect-timeout 30 --max-time 300 \
-            --output /tmp/xbps-static.tar.xz \
-            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
-          tar -xJf /tmp/xbps-static.tar.xz -C /opt/xbps
-          rm -f /tmp/xbps-static.tar.xz
-          echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
-
-      - name: Sign and publish repository
-        env:
-          XBPS_TARGET_ARCH: x86_64-musl
-        run: bash maint/repository/scripts/publish-xbps-repository.sh incoming
+          retention-days: 14

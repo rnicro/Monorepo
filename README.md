@@ -1,134 +1,56 @@
 # rnicro Void packages
 
-An XBPS source package collection for Void Linux, targeting `x86_64-musl` and Intel Skylake where noted.
+An XBPS source-package collection for Void Linux. The recipes are maintained in this repository and use Void's standard `srcpkgs/<package>/` layout.
 
-This repository is an overlay for [void-packages](https://github.com/void-linux/void-packages), not a fork. Recipes use Void's standard `srcpkgs/<package>/` layout.
+**The repository is self-contained with respect to the former standalone rnicro package repositories.** Package templates, patches, configuration, scripts, tests and documentation are stored here. Builds do not clone or read sibling `rnicro` repositories. Only the upstream Void build tree and each package's official upstream source archives are fetched.
 
 ## Packages
 
-| Package | Purpose | Package guide | Build workflow |
+| Package | Purpose | Guide | Manual build |
 | --- | --- | --- | --- |
-| [aria2](srcpkgs/aria2/) | CLI-only aria2; OpenSSL and Skylake tuning | [README](srcpkgs/aria2/README.aria2.md) | [Build](.github/workflows/build-aria2.yml) |
-| [brightnessctl](srcpkgs/brightnessctl/) | brightnessctl with Skylake tuning | [README](srcpkgs/brightnessctl/README.brightnessctl.md) | [Build](.github/workflows/build-brightnessctl.yml) |
-| [librewolf](srcpkgs/librewolf/) | Native Wayland LibreWolf build | [README](srcpkgs/librewolf/README.librewolf.md) | [Build](.github/workflows/build-librewolf.yml) |
-| [linux7.3](srcpkgs/linux7.3/) | Linux 7.3 kernel and headers with a device-focused configuration | [README](srcpkgs/linux7.3/README.linux7.3.md) | [Build](.github/workflows/build-linux7.3.yml) |
-| [tofi](srcpkgs/tofi/) | Wayland launcher; Meson/LTO and Skylake tuning | [README](srcpkgs/tofi/README.tofi.md) | [Build](.github/workflows/build-tofi.yml) |
+| [aria2](srcpkgs/aria2/) | CLI-only downloader; OpenSSL and Skylake tuning | [README](srcpkgs/aria2/README.aria2.md) | [Build](.github/workflows/build-aria2.yml) |
+| [brightnessctl](srcpkgs/brightnessctl/) | Brightness and LED control utility | [README](srcpkgs/brightnessctl/README.brightnessctl.md) | [Build](.github/workflows/build-brightnessctl.yml) |
+| [librewolf](srcpkgs/librewolf/) | Native Wayland browser build | [README](srcpkgs/librewolf/README.librewolf.md) | [Build](.github/workflows/build-librewolf.yml) |
+| [linux7.3](srcpkgs/linux7.3/) | Device-specific Linux kernel and headers | [README](srcpkgs/linux7.3/README.linux7.3.md) | [Build](.github/workflows/build-linux7.3.yml) |
+| [tofi](srcpkgs/tofi/) | Wayland launcher; Meson and LTO | [README](srcpkgs/tofi/README.tofi.md) | [Build](.github/workflows/build-tofi.yml) |
 | [velotype](srcpkgs/velotype/) | Native Rust/GPUI Markdown editor | [README](srcpkgs/velotype/README.velotype.md) | [Build](.github/workflows/build-velotype.yml) |
-| [wlsunset](srcpkgs/wlsunset/) | Wayland colour-temperature tool | [README](srcpkgs/wlsunset/README.wlsunset.md) | [Build](.github/workflows/build-wlsunset.yml) |
-All published packages target `x86_64-musl`. Packages using `-march=skylake` require an Intel Skylake-or-newer compatible CPU. The custom `linux7.3` configuration is hardware-specific; read [its package guide](srcpkgs/linux7.3/README.linux7.3.md) before installing.
+| [wlsunset](srcpkgs/wlsunset/) | Wayland colour-temperature utility | [README](srcpkgs/wlsunset/README.wlsunset.md) | [Build](.github/workflows/build-wlsunset.yml) |
 
-## Signed XBPS repository
+All recipes target `x86_64-musl`. Packages using `-march=skylake` require an Intel Skylake-compatible or newer CPU. The custom `linux7.3` configuration is for the HP Pavilion x360 Convertible T0Y58PA; read its package guide before installing it on other hardware.
 
-Successful manual builds are signed and published to one persistent GitHub Release:
+## Build with GitHub Actions
 
-```text
-https://github.com/rnicro/Monorepo/releases/download/xbps-repository
-```
+Open **Actions** and run the dedicated **Build <package>** workflow, or run **Validate and build XBPS packages** and choose one package or `all`. Successful builds upload ordinary `.xbps` files as workflow artifacts; there is no signed repository or release publisher. Download the artifact from the completed workflow run. Artifacts are retained for 14 days.
 
-Each package build updates the repository in place. Existing package archives are retained when they are still referenced by the XBPS index. The workflow rejects changed bytes under an already-published package filename; increment that package's `revision` before publishing changed output.
-
-### 1. Create the signing key
-
-XBPS requires remote repositories and package archives to be signed using an RSA key in PEM format ([Void Linux signing guide](https://docs.voidlinux.org/xbps/repositories/signing.html)). Create an encrypted 4096-bit key on a trusted machine:
+To install a downloaded package on a compatible Void Linux system:
 
 ```sh
-umask 077
-openssl genrsa -des3 -out private.pem 4096
+sudo xbps-install ./package-version_revision.x86_64-musl.xbps
 ```
 
-Choose a strong passphrase. Keep an offline backup of `private.pem`; **never commit it to this repository**.
-
-### 2. Configure GitHub Actions
-
-In **rnicro/Monorepo → Settings → Secrets and variables → Actions**, add:
-
-| Name | Type | Value |
-| --- | --- | --- |
-| `PRIV_KEY` | Secret | Complete contents of `private.pem` |
-| `SIGN_PASS` | Secret | Passphrase used when creating the key |
-| `SIGNEDBY` | Variable | Signing identity shown by XBPS, e.g. `rnicro <you@example.com>` |
-
-The publish job uses the repository's `GITHUB_TOKEN`. Ensure Actions is allowed to create/update releases and that the workflow's `contents: write` permission is enabled. Do not expose the private key or passphrase in workflow logs.
-
-The repository key is initialized on the first publication. Keep the same private key and passphrase for future updates; replacing the key requires a coordinated repository/client trust-key migration.
-
-### 3. Build and publish packages
-
-Each package has a dedicated **Build <package>** workflow in **Actions** (for example, **Build aria2**). Run the workflow for the package you want to build. The `publish` input defaults to enabled; turn it off to build and upload an artifact without changing the signed repository. Run dedicated package workflows one at a time because they share the same release publisher.
-
-The **Validate and build XBPS packages** workflow also retains its package dropdown: choose an individual package or `all` to build packages sequentially. Pushes and pull requests run validation only; they do not publish packages.
-
-Successful package builds pass their XBPS archives to the shared publisher, which signs the archives, refreshes the repository index, and updates the `xbps-repository` release. Package publication is serialized because all package workflows update the same release.
-
-### 4. Add the repository to a Void Linux system
-
-Create an XBPS repository configuration file:
-
-```sh
-sudo install -d -m 0755 /etc/xbps.d
-printf '%s\n' \
-  'repository=https://github.com/rnicro/Monorepo/releases/download/xbps-repository' \
-  | sudo tee /etc/xbps.d/20-rnicro.conf
-```
-
-Synchronize the repository metadata:
-
-```sh
-sudo xbps-install -S
-```
-
-On first use, XBPS asks whether to trust the repository's signing key. Verify the displayed signer and key fingerprint through a trusted channel before accepting it. After the key is trusted, install or upgrade packages normally:
-
-```sh
-sudo xbps-install -Su
-sudo xbps-install aria2
-```
-
-Replace `aria2` with `brightnessctl`, `librewolf`, `linux7.3`, `tofi`, `velotype`, or `wlsunset` as required. Review package notes and CPU/device restrictions before installing.
+For `linux7.3`, install the kernel and headers packages from the same build artifact and keep a known-working kernel installed until the new kernel is verified.
 
 ## Build locally
 
-Clone the official Void build tree and this overlay:
+Clone this repository and the official Void build tree:
 
 ```sh
+git clone https://github.com/rnicro/Monorepo.git
 git clone https://github.com/void-linux/void-packages.git
-git clone https://github.com/rnicro/Monorepo.git rnicro-packages
-cd rnicro-packages
-pkg=tofi # choose one package
+cd Monorepo
+bash maint/build-package.sh tofi ../void-packages
 ```
 
-Prepare extra source inputs only for packages that need them:
-
-```sh
-# Velotype: download and verify its pinned source archive.
-version="$(sed -n 's/^version=//p' srcpkgs/velotype/template)"
-bash maint/velotype/scripts/prepare-source.sh \
-  "../void-packages/hostdir/sources/velotype-$version"
-
-# LibreWolf: fetch and verify Mozilla's pinned fallback source files.
-bash maint/librewolf/scripts/prepare-source-fallbacks.sh
-```
-
-Overlay and build the selected recipe:
-
-```sh
-rm -rf "../void-packages/srcpkgs/$pkg"
-cp -a "srcpkgs/$pkg" "../void-packages/srcpkgs/$pkg"
-cd ../void-packages
-./xbps-src -A x86_64-musl binary-bootstrap
-./xbps-src -A x86_64-musl pkg "$pkg"
-```
-
-For LibreWolf and Velotype, run their preparation commands before overlaying the recipe. Packages are written to `hostdir/binpkgs/`.
+Replace `tofi` with the required package name. The same helper is used by CI. It validates and overlays the local recipe, prepares any pinned extra source inputs, runs `xbps-src` for `x86_64-musl`, and places the generated packages in `dist/`. See [package maintenance](docs/MAINTAINING.md) for source updates, checksums, revisions, tests and package-specific notes.
 
 ## Repository layout
 
-- `srcpkgs/<package>/`: canonical XBPS template, package files, and `README.<package>.md` guide.
-- `.github/workflows/build-<package>.yml`: package-specific manual build entry points.
-- `.github/workflows/build-package.yml`: shared reusable package build and signed-publish implementation.
-- `maint/<package>/scripts/`: package validation, source preparation, and focused tests.
-- `maint/repository/scripts/`: shared signed XBPS repository publisher and its test.
-- `docs/packages/`: compatibility links to the package-local guides.
+- `srcpkgs/<package>/`: full XBPS template, package files, patches, config and package guide.
+- `maint/build-package.sh`: shared local and CI build entry point.
+- `maint/<package>/scripts/`: package validation and source preparation helpers.
+- `.github/workflows/build-<package>.yml`: small manual workflow per package.
+- `.github/workflows/build-package.yml`: shared checkout, cache, build and artifact implementation.
 - `examples/<package>/`: optional runtime configuration examples.
+- `docs/MAINTAINING.md`: maintenance and cache policy.
 
-When updating recipes, follow Void's [package contribution guide](https://github.com/void-linux/void-packages/blob/master/CONTRIBUTING.md) and [manual](https://github.com/void-linux/void-packages/blob/master/Manual.md). Verify upstream source hashes and increment `revision` when packaging changes alter output for an unchanged upstream version.
+For packaging conventions, follow the official Void Linux [contribution guide](https://github.com/void-linux/void-packages/blob/master/CONTRIBUTING.md) and [XBPS manual](https://github.com/void-linux/void-packages/blob/master/Manual.md).

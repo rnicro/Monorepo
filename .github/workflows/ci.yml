@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Select one package or all packages (x86_64-musl)"
+        description: Select one package or all packages
         type: choice
         required: true
         default: none
@@ -44,7 +44,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: validate-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -76,9 +76,13 @@ jobs:
           done < <(find srcpkgs maint -type f \( -name template -o -name '*.sh' \) -print0)
 
       - name: Validate pinned LibreWolf source fallbacks
-        run: bash maint/librewolf/scripts/prepare-source-fallbacks.sh
+        run: |
+          set -euo pipefail
+          fallback_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$fallback_dir"' EXIT
+          bash maint/librewolf/scripts/prepare-source-fallbacks.sh "$fallback_dir"
 
-      - name: Validate all package templates
+      - name: Validate package templates
         shell: bash
         run: |
           set -euo pipefail
@@ -95,32 +99,26 @@ jobs:
           bash maint/velotype/scripts/test-prepare-source.sh
           bash maint/velotype/scripts/test-wayland-patch.sh
 
-      - name: Validate XBPS repository publisher
-        run: bash maint/repository/scripts/test-publish-xbps-repository.sh
-
-      - name: Summarize supported packages
+      - name: Validate shared build helper and package guides
+        shell: bash
         run: |
-          {
-            echo "## XBPS source package validation"
-            echo
-            echo "Validated seven packages for the x86_64-musl target."
-            echo
-            printf '%s\n' "- aria2" "- brightnessctl" "- librewolf" "- linux7.3" "- tofi" "- velotype" "- wlsunset"
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          bash -n maint/build-package.sh
+          for package in aria2 brightnessctl librewolf linux7.3 tofi velotype wlsunset; do
+            test -s "srcpkgs/$package/README.$package.md"
+            test -s "srcpkgs/$package/template"
+          done
+          git diff --check
 
   build:
     name: Build ${{ matrix.package }}
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.package != 'none' }}
     needs: validate
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         package: ${{ fromJSON(inputs.package == 'all' && '["aria2","brightnessctl","librewolf","linux7.3","tofi","velotype","wlsunset"]' || format('["{0}"]', inputs.package)) }}
     uses: ./.github/workflows/build-package.yml
     with:
       package: ${{ matrix.package }}
-      publish: true
-    secrets: inherit

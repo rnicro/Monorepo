@@ -223,12 +223,14 @@ wasm_wrapper_source="$package_dir/files/wasm2c_sandbox_wrapper.c"
   echo "RLBox WASI wrapper fallback source is missing" >&2
   exit 1
 }
-for host_source in nsinstall.c pathsub.c; do
-  [ -s "$package_dir/files/$host_source" ] || {
-    echo "Mozilla $host_source fallback source is missing" >&2
-    exit 1
-  }
-done
+fallback_helper="maint/librewolf/scripts/prepare-source-fallbacks.sh"
+[ -s "$fallback_helper" ] || {
+  echo "Mozilla fallback source helper is missing" >&2
+  exit 1
+}
+grep -Fq 'mozilla_commit=45030f6970cae629c797527ce66836dcad7804d4' "$fallback_helper"
+grep -Fq 'f245dab3eeaa6f98d612eee01aa1fd2b6848e94186ab1d97c6b69e6811966611' "$fallback_helper"
+grep -Fq 'a9a772f937ab63cbaf9c01fa62204e4e455aa414709bd047ccd00f1701f6b95a' "$fallback_helper"
 grep -Fq 'for host_source in nsinstall.c pathsub.c; do' "$template" || {
   echo "template must restore both Mozilla host source files after extraction" >&2
   exit 1

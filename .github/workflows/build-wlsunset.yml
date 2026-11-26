@@ -2,20 +2,12 @@ name: Build wlsunset
 
 on:
   workflow_dispatch:
-    inputs:
-      publish:
-        description: Sign and publish this package to the shared XBPS repository
-        type: boolean
-        required: false
-        default: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     uses: ./.github/workflows/build-package.yml
     with:
       package: wlsunset
-      publish: ${{ inputs.publish }}
-    secrets: inherit

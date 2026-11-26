@@ -1,63 +1,37 @@
-> **Retained original documentation.** This README comes from the standalone `rnicro/linux` repository. Its repository layout and standalone release instructions are historical; the consolidated repository's canonical layout and current build/CI instructions are in the [root README](../../README.md).
+# linux7.3
 
----
+Hardware-specific Linux kernel and headers package for the HP Pavilion x360 Convertible T0Y58PA.
 
-# Linux 7.3 for HP Pavilion x360
+## Package profile
 
-A hardware-specific Linux kernel package for the HP Pavilion x360 Convertible T0Y58PA, targeting Void Linux `x86_64-musl`.
+| Field | Value |
+| --- | --- |
+| Upstream version | `7.3.5` |
+| Package revision | `1` |
+| Target | `x86_64-musl` |
+| CPU baseline | Intel Skylake |
+| Source | [Linux kernel releases](https://www.kernel.org/) |
+| Configuration | [x86_64-dotconfig-custom](files/x86_64-dotconfig-custom) |
 
-## Target hardware
+The recipe, kernel configuration, downstream patches, debug helper and configuration validator are all stored in this package directory. The kernel compiler flags target Skylake; they are not selected from the GitHub runner's CPU.
 
-- Intel Core i3-6100U (Skylake, 2 cores / 4 threads)
-- Intel HD Graphics 520
-- Intel Wireless 3165 and Intel Bluetooth
-- Realtek RTL810xE Ethernet
-- Intel Sunrise Point-LP HDA / Skylake SOF audio
-- ELAN touchscreen and stylus; Synaptics touchpad
-- HP webcam, USB 3.x and Realtek RTS522A SD card reader
-- SATA HDD, ext4 root filesystem, UEFI and GRUB
+The custom configuration is specific to the reference laptop: Intel HD Graphics 520, Intel Wireless 3165, Realtek RTL810xE Ethernet, Skylake audio, ELAN touchscreen, Synaptics touchpad, HP sensors and the built-in SATA/ext4 boot path. It is not a general-purpose kernel configuration. Review the configuration and hardware notes before installing it on another machine.
 
 ## Build
 
-GitHub Actions builds the Void XBPS package on an Ubuntu-hosted runner. The runner is only the build host; kernel code is compiled for the target device.
-
-The Void Linux `linux7.3` package recipe is used as the packaging baseline. The upstream `mv-debug` module-symbol helper is included locally and invoked through `sh`, so the build does not depend on Git preserving executable mode for that file. The workflow overlays this repository's package recipe and custom x86_64 configuration into `void-packages`, bootstraps `x86_64-musl`, and builds the kernel and headers packages.
-
-### Skylake tuning
-
-Kernel C compilation uses:
+From the repository root:
 
 ```sh
-KCFLAGS="-march=skylake -mtune=skylake"
+git clone https://github.com/void-linux/void-packages.git ../void-packages
+bash maint/build-package.sh linux7.3 ../void-packages
 ```
 
-These flags target the Intel Core i3-6100U, not the GitHub Actions runner. This kernel is not intended for pre-Skylake x86_64 processors. The compiler is GCC; the host runner's CPU does not determine the target instruction set.
-
-## Configuration choices
-
-- x86_64 only; 32-bit and x32 userspace compatibility disabled
-- SATA/AHCI, SCSI disk support and ext4 built into the kernel
-- Intel i915, iwlwifi, Bluetooth, Realtek Ethernet, audio, USB, ELAN, Synaptics, HP WMI and sensor drivers enabled as modules where practical
-- Suspend/resume retained; hibernation disabled
-- KVM, VFIO, vhost, virtio, Xen and Hyper-V guest support disabled
-- General namespaces and cgroups are retained to avoid breaking ordinary userspace services
-- Firmware is not bundled in the kernel packages; install Void's relevant `linux-firmware` packages and Intel microcode separately
-
-## Releases
-
-Successful builds from `main` publish versioned GitHub Releases containing:
-
-- `linux7.3-<version>_<revision>.x86_64-musl.xbps`
-- `linux7.3-headers-<version>_<revision>.x86_64-musl.xbps`
-
-The debug-symbol subpackage is not published. Packaging changes that alter package bytes require incrementing `revision` in `srcpkgs/linux7.3/template`.
-
-## Installing
-
-Download both XBPS files from the same release. Install them locally with XBPS, then let Void's kernel hooks and dracut regenerate the initramfs and boot entries as configured on the system.
-
-Keep the existing working kernel installed until the new kernel has booted successfully and graphics, networking, audio, touchscreen, touchpad, webcam, suspend/resume and SD card access have been tested.
+The shared script overlays the complete local recipe and configuration, bootstraps `x86_64-musl`, builds the kernel and headers packages and copies the resulting `.xbps` files into `dist/`.
 
 ## Maintenance
 
-When updating the kernel version, update the source version and checksums in `srcpkgs/linux7.3/template`, refresh the base configuration against the matching Void package, and test the complete XBPS build before publishing.
+When updating the kernel, change `version`, the source `distfiles` and both checksums in [template](template). Refresh the custom configuration against the matching kernel release and re-check every downstream patch. Run [validate-config.sh](files/validate-config.sh) and complete a real package build before using the new kernel.
+
+Increment `revision` when packaging changes alter output for the same kernel version. Keep a known-working kernel installed until the updated kernel has booted and its graphics, networking, audio, input devices, suspend/resume and storage have been tested.
+
+Upstream references: [kernel.org](https://www.kernel.org/) and [Void's Linux package tree](https://github.com/void-linux/void-packages/tree/master/srcpkgs).

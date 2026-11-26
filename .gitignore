@@ -1,6 +1,5 @@
 /hostdir/
 /void-packages/
 /dist/
-/release-assets/
 *.xbps
 *.log
