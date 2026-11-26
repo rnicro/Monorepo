@@ -1,4 +1,4 @@
-> **Retained original documentation.** This README comes from the standalone `rnicro/brightnessctl` repository. Its repository layout and standalone release instructions are historical; the consolidated repository's canonical layout and current build/CI instructions are in the [root README](../../../README.md).
+> **Retained original documentation.** This README comes from the standalone `rnicro/brightnessctl` repository. Its repository layout and standalone release instructions are historical; the consolidated repository's canonical layout and current build/CI instructions are in the [root README](../../README.md).
 
 ---
 

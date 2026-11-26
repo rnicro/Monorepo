@@ -1,4 +1,4 @@
-> **Retained original documentation.** This README comes from the standalone `rnicro/tofi` repository. Its repository layout and standalone release instructions are historical; the consolidated repository's canonical layout and current build/CI instructions are in the [root README](../../../README.md).
+> **Retained original documentation.** This README comes from the standalone `rnicro/tofi` repository. Its repository layout and standalone release instructions are historical; the consolidated repository's canonical layout and current build/CI instructions are in the [root README](../../README.md).
 
 ---
 
@@ -37,7 +37,7 @@ The current package is **0.9.1-r2**. Revision 2 accounts for the LTO-enabled bui
 
 ## Runtime profile based on the actual setup config
 
-The [`examples/tofi/dwl-run.conf`](../../../examples/tofi/dwl-run.conf) profile is based on [`rnicro/setup/HOME/.config/tofi/config`](https://github.com/rmicro/setup/blob/main/HOME/.config/tofi/config), rather than a generic theme.
+The [`examples/tofi/dwl-run.conf`](../../examples/tofi/dwl-run.conf) profile is based on [`rnicro/setup/HOME/.config/tofi/config`](https://github.com/rmicro/setup/blob/main/HOME/.config/tofi/config), rather than a generic theme.
 
 The existing configuration is already doing the most important tofi startup optimization: it specifies a **font file path** (`/usr/share/fonts/noto/NotoSansMono-Regular.ttf`). Upstream documents that this bypasses Pango/Fontconfig font-name lookup and uses the direct HarfBuzz/Cairo path. It also already has a short 30-pixel top ribbon, horizontal results, no borders/outlines, disabled history sorting, and direct drun launching.
 
