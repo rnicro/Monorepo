@@ -98,6 +98,16 @@ jobs:
           restore-keys: |
             velotype-cargo-${{ runner.os }}-${{ hashFiles('srcpkgs/velotype/template') }}-
 
+      # niri uses Void's Cargo build style and reuses the Cargo registry cache.
+      - name: Restore niri Cargo cache
+        if: inputs.package == 'niri'
+        uses: actions/cache@v4
+        with:
+          path: void-packages/hostdir/cargo/registry
+          key: niri-cargo-${{ runner.os }}-${{ hashFiles('srcpkgs/niri/template') }}-${{ github.run_id }}
+          restore-keys: |
+            niri-cargo-${{ runner.os }}-${{ hashFiles('srcpkgs/niri/template') }}-
+
       # LibreWolf's template uses /host/sccache and /host/pgo-cache inside xbps-src.
       - name: Restore LibreWolf compiler and PGO caches
         if: inputs.package == 'librewolf'
