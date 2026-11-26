@@ -1,0 +1,241 @@
+name: Build Void packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "srcpkgs/**"
+      - "maint/**"
+      - "examples/**"
+      - "docs/**"
+      - ".github/workflows/**"
+      - ".github/dependabot.yml"
+      - "README.md"
+      - ".gitignore"
+  pull_request:
+    paths:
+      - "srcpkgs/**"
+      - "maint/**"
+      - "examples/**"
+      - "docs/**"
+      - ".github/workflows/**"
+      - ".github/dependabot.yml"
+      - "README.md"
+      - ".gitignore"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Select one package or all packages
+        type: choice
+        required: true
+        default: none
+        options:
+          - none
+          - all
+          - aria2
+          - brightnessctl
+          - labwc
+          - librewolf
+          - linux7.3
+          - niri
+          - noctalia
+          - tofi
+          - umbriel
+          - velotype
+          - wlsunset
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate package sources
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            case "$file" in
+              */template) bash -n "$file" ;;
+              *)
+                if head -n 1 "$file" | grep -q 'bash'; then
+                  bash -n "$file"
+                else
+                  sh -n "$file"
+                fi
+                ;;
+            esac
+          done < <(find srcpkgs maint -type f \( -name template -o -name '*.sh' \) -print0)
+
+      - name: Validate pinned LibreWolf source fallbacks
+        run: |
+          set -euo pipefail
+          fallback_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$fallback_dir"' EXIT
+          bash maint/librewolf/scripts/prepare-source-fallbacks.sh "$fallback_dir"
+
+      - name: Validate package templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          for package in aria2 brightnessctl labwc librewolf linux7.3 niri noctalia tofi umbriel velotype wlsunset; do
+            echo "::group::$package"
+            bash "maint/$package/scripts/test-template.sh"
+            echo "::endgroup::"
+          done
+
+      - name: Validate Velotype source preparation and Wayland patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash maint/velotype/scripts/test-prepare-source.sh
+          bash maint/velotype/scripts/test-wayland-patch.sh
+
+      - name: Validate shared build helper and package guides
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n maint/build-package.sh
+          bash maint/test-build-package.sh
+          for package in aria2 brightnessctl labwc librewolf linux7.3 niri noctalia tofi umbriel velotype wlsunset; do
+            test -s "srcpkgs/$package/README.$package.md"
+            test -s "srcpkgs/$package/template"
+          done
+          git diff --check
+
+  build:
+    name: Build ${{ matrix.package }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.package != 'none' }}
+    needs: validate
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        package: ${{ fromJSON(inputs.package == 'all' && '["aria2","brightnessctl","labwc","librewolf","linux7.3","niri","noctalia","tofi","umbriel","velotype","wlsunset"]' || format('["{0}"]', inputs.package)) }}
+    concurrency:
+      group: xbps-build-${{ matrix.package }}-${{ github.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      XBPS_TARGET_ARCH: x86_64-musl
+    steps:
+      - name: Check out this package collection
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check out upstream Void build tools
+        uses: actions/checkout@v7
+        with:
+          repository: void-linux/void-packages
+          ref: master
+          path: void-packages
+          persist-credentials: false
+
+      - name: Record the Void source revision
+        id: void-revision
+        working-directory: void-packages
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Shared static xbps tools are downloaded once and reused by all packages.
+      - name: Restore shared xbps-static cache
+        id: xbps-static-cache
+        uses: actions/cache@v6
+        with:
+          path: /opt/xbps
+          key: xbps-static-${{ runner.os }}-x86_64-musl-v1
+
+      - name: Download xbps-static on cache miss
+        if: steps.xbps-static-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p /opt/xbps
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 30 --max-time 300 \
+            --output /tmp/xbps-static.tar.xz \
+            https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
+          tar -xJf /tmp/xbps-static.tar.xz -C /opt/xbps
+          rm -f /tmp/xbps-static.tar.xz
+
+      - name: Add cached xbps tools to PATH
+        run: |
+          test -x /opt/xbps/usr/bin/xbps-install
+          echo "/opt/xbps/usr/bin" >> "$GITHUB_PATH"
+
+      # xbps-src uses unprivileged user namespaces for its build chroot.
+      # Relax this host-only AppArmor restriction on the ephemeral runner only.
+      - name: Allow rootless xbps-src user namespaces
+        run: |
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+      # Source archives are still checksum-verified by xbps-src or the package helper.
+      - name: Restore package source cache
+        uses: actions/cache@v6
+        with:
+          path: void-packages/hostdir/sources
+          key: xbps-sources-${{ runner.os }}-${{ matrix.package }}-${{ hashFiles(format('srcpkgs/{0}/template', matrix.package)) }}-${{ github.run_id }}
+          restore-keys: |
+            xbps-sources-${{ runner.os }}-${{ matrix.package }}-
+
+      # Cross-package fallback reuses build dependencies for the same Void revision and ABI.
+      # Package/run-specific keys let concurrent matrix jobs save independently.
+      - name: Restore Void binary-package cache
+        uses: actions/cache@v6
+        with:
+          path: void-packages/hostdir/binpkgs
+          key: xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-${{ matrix.package }}-${{ github.run_id }}
+          restore-keys: |
+            xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-${{ matrix.package }}-
+            xbps-binpkgs-${{ runner.os }}-${{ env.XBPS_TARGET_ARCH }}-${{ steps.void-revision.outputs.commit }}-
+
+      # niri and Velotype share Cargo's registry. Velotype's cache also contains sccache data.
+      - name: Restore Rust build cache
+        if: ${{ matrix.package == 'niri' || matrix.package == 'velotype' }}
+        uses: actions/cache@v6
+        with:
+          path: void-packages/hostdir/cargo
+          key: xbps-cargo-${{ runner.os }}-${{ steps.void-revision.outputs.commit }}-${{ matrix.package }}-${{ hashFiles(format('srcpkgs/{0}/template', matrix.package)) }}-${{ github.run_id }}
+          restore-keys: |
+            xbps-cargo-${{ runner.os }}-${{ steps.void-revision.outputs.commit }}-${{ matrix.package }}-
+            xbps-cargo-${{ runner.os }}-${{ steps.void-revision.outputs.commit }}-
+
+      # LibreWolf uses /host/sccache and /host/pgo-cache inside xbps-src.
+      - name: Restore LibreWolf compiler and PGO caches
+        if: ${{ matrix.package == 'librewolf' }}
+        uses: actions/cache@v6
+        with:
+          path: |
+            void-packages/hostdir/sccache
+            void-packages/hostdir/pgo-cache
+          key: librewolf-build-${{ runner.os }}-${{ hashFiles('srcpkgs/librewolf/template', 'srcpkgs/librewolf/files/**', 'srcpkgs/librewolf/patches/**') }}-${{ github.run_id }}
+          restore-keys: |
+            librewolf-build-${{ runner.os }}-${{ hashFiles('srcpkgs/librewolf/template', 'srcpkgs/librewolf/files/**', 'srcpkgs/librewolf/patches/**') }}-
+
+      - name: Validate and build package
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: bash maint/build-package.sh "$PACKAGE" "$GITHUB_WORKSPACE/void-packages"
+
+      - name: Upload XBPS package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.package }}-x86_64-musl
+          path: dist/*.xbps
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

@@ -34,14 +34,14 @@ The recipes target `x86_64-musl`. Where `-march=skylake` is set, the result requ
 
 ## GitHub Actions and caches
 
-Each `Build <package>` workflow calls the shared `.github/workflows/build-package.yml`. The validation workflow checks all recipes and helper scripts; its manual dispatch can build one package or all packages.
+The single `.github/workflows/build.yml` workflow validates every package on pushes and pull requests. Its manual dispatch can build one selected package or all packages in a matrix; selecting `none` runs validation only.
 
-The shared workflow maintains these caches:
+The build workflow maintains these caches:
 
 - **Static xbps tools:** one stable cache key for all packages, at `/opt/xbps`. Only a cache miss downloads and extracts `xbps-static`. Bump the `xbps-static` cache-key version in the shared workflow when intentionally refreshing the cached toolchain.
-- **Void build dependencies:** binary packages are cached per package for the exact Void `master` commit and target architecture. A different Void commit gets a separate cache; stale binary packages are not restored across commits.
+- **Void build dependencies:** binary packages are cached per package for the exact Void `master` commit and target architecture. Restore keys also allow reuse across packages built against that same Void commit and target ABI; a different Void commit gets a separate cache.
 - **Source archives:** cached per package. Velotype's source helper checks the pinned SHA-256 before reusing an archive.
-- **Compiler caches:** Velotype's Cargo registry/sccache and niri's Cargo registry are cached separately from the common Void caches. LibreWolf's sccache/PGO data is also cached separately.
+- **Rust caches:** niri and Velotype share the Cargo registry cache; Velotype's sccache data is included in that cache. LibreWolf's sccache/PGO data is cached separately.
 
 On Ubuntu 24.04 GitHub-hosted runners, the shared build workflow temporarily relaxes AppArmor's unprivileged-user-namespace restriction because `xbps-src` requires rootless namespaces for its build chroot. This setting applies only to that ephemeral runner job, not to the installed Void system.
 
@@ -49,8 +49,7 @@ GitHub Actions caches are an optimization, not a build input. Deleting a cache m
 
 ## What to update when changing the build
 
-- Keep package-specific commands and flags in the package template or its helper, not duplicated across eleven workflow files.
-- Keep common checkout, xbps installation, caching and artifact upload in `.github/workflows/build-package.yml`.
-- Keep the manual package workflow files as small wrappers that only select a package.
+- Keep package-specific commands and flags in the package template or its helper.
+- Keep validation, checkout, xbps installation, caching, building and artifact upload in the single `.github/workflows/build.yml` workflow.
 - Keep package-specific tests close to their package under `maint/<package>/scripts/`.
 - Change the shared build helper and this document together if build steps or cache paths move.
