@@ -6,17 +6,16 @@ This repository is an overlay for [void-packages](https://github.com/void-linux/
 
 ## Packages
 
-| Package | Purpose |
-| --- | --- |
-| [aria2](srcpkgs/aria2/) | CLI-only aria2; OpenSSL and Skylake tuning |
-| [brightnessctl](srcpkgs/brightnessctl/) | brightnessctl with Skylake tuning |
-| [librewolf](srcpkgs/librewolf/) | Native Wayland LibreWolf build |
-| [linux7.3](srcpkgs/linux7.3/) | Linux 7.3 kernel and headers with a device-focused configuration |
-| [tofi](srcpkgs/tofi/) | Wayland launcher; Meson/LTO and Skylake tuning |
-| [velotype](srcpkgs/velotype/) | Native Rust/GPUI Markdown editor |
-| [wlsunset](srcpkgs/wlsunset/) | Wayland colour-temperature tool |
-
-All published packages target `x86_64-musl`. Packages using `-march=skylake` require an Intel Skylake-or-newer compatible CPU. The custom `linux7.3` configuration is hardware-specific; read [its package notes](docs/packages/linux.md) before installing.
+| Package | Purpose | Package guide | Build workflow |
+| --- | --- | --- | --- |
+| [aria2](srcpkgs/aria2/) | CLI-only aria2; OpenSSL and Skylake tuning | [README](srcpkgs/aria2/README.aria2.md) | [Build](.github/workflows/build-aria2.yml) |
+| [brightnessctl](srcpkgs/brightnessctl/) | brightnessctl with Skylake tuning | [README](srcpkgs/brightnessctl/README.brightnessctl.md) | [Build](.github/workflows/build-brightnessctl.yml) |
+| [librewolf](srcpkgs/librewolf/) | Native Wayland LibreWolf build | [README](srcpkgs/librewolf/README.librewolf.md) | [Build](.github/workflows/build-librewolf.yml) |
+| [linux7.3](srcpkgs/linux7.3/) | Linux 7.3 kernel and headers with a device-focused configuration | [README](srcpkgs/linux7.3/README.linux7.3.md) | [Build](.github/workflows/build-linux7.3.yml) |
+| [tofi](srcpkgs/tofi/) | Wayland launcher; Meson/LTO and Skylake tuning | [README](srcpkgs/tofi/README.tofi.md) | [Build](.github/workflows/build-tofi.yml) |
+| [velotype](srcpkgs/velotype/) | Native Rust/GPUI Markdown editor | [README](srcpkgs/velotype/README.velotype.md) | [Build](.github/workflows/build-velotype.yml) |
+| [wlsunset](srcpkgs/wlsunset/) | Wayland colour-temperature tool | [README](srcpkgs/wlsunset/README.wlsunset.md) | [Build](.github/workflows/build-wlsunset.yml) |
+All published packages target `x86_64-musl`. Packages using `-march=skylake` require an Intel Skylake-or-newer compatible CPU. The custom `linux7.3` configuration is hardware-specific; read [its package guide](srcpkgs/linux7.3/README.linux7.3.md) before installing.
 
 ## Signed XBPS repository
 
@@ -55,13 +54,11 @@ The repository key is initialized on the first publication. Keep the same privat
 
 ### 3. Build and publish packages
 
-Open **Actions → Validate and build XBPS packages → Run workflow** and choose an entry from the **Package** dropdown:
+Each package has a dedicated **Build <package>** workflow in **Actions** (for example, **Build aria2**). Run the workflow for the package you want to build. The `publish` input defaults to enabled; turn it off to build and upload an artifact without changing the signed repository.
 
-- Select an individual package to build only that package.
-- Select `all` to build all seven packages. Builds run at most two at a time.
-- Select `none` to run validation without building or publishing.
+The **Validate and build XBPS packages** workflow also retains its package dropdown: choose an individual package or `all` to build up to two packages at a time. Pushes and pull requests run validation only; they do not publish packages.
 
-After successful builds, the workflow gathers the generated artifacts, signs their XBPS archives, refreshes the repository index, and updates the `xbps-repository` release. Pushes and pull requests run validation only; they do not publish packages.
+Successful package builds pass their XBPS archives to the shared publisher, which signs the archives, refreshes the repository index, and updates the `xbps-repository` release. Package publication is serialized because all package workflows update the same release.
 
 ### 4. Add the repository to a Void Linux system
 
@@ -126,11 +123,12 @@ For LibreWolf and Velotype, run their preparation commands before overlaying the
 
 ## Repository layout
 
-- `srcpkgs/<package>/`: canonical XBPS templates, patches, and package files.
-- `maint/<package>/scripts/test-template.sh`: consistent package-template validation entry point.
-- `maint/<package>/scripts/`: package-specific source preparation and focused tests.
-- `maint/repository/scripts/`: signed repository publisher and its test.
-- `docs/packages/`: package notes and hardware constraints.
+- `srcpkgs/<package>/`: canonical XBPS template, package files, and `README.<package>.md` guide.
+- `.github/workflows/build-<package>.yml`: package-specific manual build entry points.
+- `.github/workflows/build-package.yml`: shared reusable package build and signed-publish implementation.
+- `maint/<package>/scripts/`: package validation, source preparation, and focused tests.
+- `maint/repository/scripts/`: shared signed XBPS repository publisher and its test.
+- `docs/packages/`: compatibility links to the package-local guides.
 - `examples/<package>/`: optional runtime configuration examples.
 
 When updating recipes, follow Void's [package contribution guide](https://github.com/void-linux/void-packages/blob/master/CONTRIBUTING.md) and [manual](https://github.com/void-linux/void-packages/blob/master/Manual.md). Verify upstream source hashes and increment `revision` when packaging changes alter output for an unchanged upstream version.

@@ -1,0 +1,21 @@
+name: Build aria2
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Sign and publish this package to the shared XBPS repository
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-package.yml
+    with:
+      package: aria2
+      publish: ${{ inputs.publish }}
+    secrets: inherit
