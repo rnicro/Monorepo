@@ -54,9 +54,9 @@ The repository key is initialized on the first publication. Keep the same privat
 
 ### 3. Build and publish packages
 
-Each package has a dedicated **Build <package>** workflow in **Actions** (for example, **Build aria2**). Run the workflow for the package you want to build. The `publish` input defaults to enabled; turn it off to build and upload an artifact without changing the signed repository.
+Each package has a dedicated **Build <package>** workflow in **Actions** (for example, **Build aria2**). Run the workflow for the package you want to build. The `publish` input defaults to enabled; turn it off to build and upload an artifact without changing the signed repository. Run dedicated package workflows one at a time because they share the same release publisher.
 
-The **Validate and build XBPS packages** workflow also retains its package dropdown: choose an individual package or `all` to build up to two packages at a time. Pushes and pull requests run validation only; they do not publish packages.
+The **Validate and build XBPS packages** workflow also retains its package dropdown: choose an individual package or `all` to build packages sequentially. Pushes and pull requests run validation only; they do not publish packages.
 
 Successful package builds pass their XBPS archives to the shared publisher, which signs the archives, refreshes the repository index, and updates the `xbps-repository` release. Package publication is serialized because all package workflows update the same release.
 

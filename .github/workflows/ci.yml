@@ -116,7 +116,7 @@ jobs:
       contents: write
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         package: ${{ fromJSON(inputs.package == 'all' && '["aria2","brightnessctl","librewolf","linux7.3","tofi","velotype","wlsunset"]' || format('["{0}"]', inputs.package)) }}
     uses: ./.github/workflows/build-package.yml
